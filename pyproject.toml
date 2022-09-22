@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "local-ecs-api"
+description = "Local ECS Run Task API"
+version = "0.0.1"
+authors = [
+    {"name" = "Marshall Mamiya"}
+]
+keywords = ["ecs", "local", "run_task"]
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+]
+dependencies = [
+    "pydantic==1.10.2",
+    "fastapi==0.85.0",
+    "python-on-whales==0.52.0",
+]
+
+[project.optional-dependencies]
+tests = [
+    "pre-commit",
+    "pytest",
+    "moto",
+]
