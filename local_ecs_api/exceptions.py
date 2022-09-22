@@ -1,0 +1,2 @@
+class EcsAPIException(Exception):
+    pass
