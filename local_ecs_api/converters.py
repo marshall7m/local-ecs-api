@@ -23,13 +23,19 @@ log.setLevel(logging.DEBUG)
 COMPOSE_DEST = os.environ.get("COMPOSE_DEST", "/tmp")
 ECS_NETWORK_NAME = os.environ.get("ECS_NETWORK_NAME", "ecs-local-network")
 
+
 def random_ip(network):
     network = ipaddress.IPv4Network(network)
-    network_int, = struct.unpack("!I", network.network_address.packed) # make network address into an integer
-    rand_bits = network.max_prefixlen - network.prefixlen # calculate the needed bits for the host part
-    rand_host_int = random.randint(0, 2**rand_bits - 1) # generate random host part
-    ip_address = ipaddress.IPv4Address(network_int + rand_host_int) # combine the parts 
+    (network_int,) = struct.unpack(
+        "!I", network.network_address.packed
+    )  # make network address into an integer
+    rand_bits = (
+        network.max_prefixlen - network.prefixlen
+    )  # calculate the needed bits for the host part
+    rand_host_int = random.randint(0, 2**rand_bits - 1)  # generate random host part
+    ip_address = ipaddress.IPv4Address(network_int + rand_host_int)  # combine the parts
     return ip_address.exploded
+
 
 def generate_local_task_compose_file(task_def, path):
 
@@ -42,6 +48,7 @@ def generate_local_task_compose_file(task_def, path):
         subprocess.run(shlex.split(cmd), check=True)
 
     return path
+
 
 def merge_overrides(task_def: str, overrides: overrides):
     log.debug("Merging container overrides")
@@ -66,24 +73,41 @@ def merge_overrides(task_def: str, overrides: overrides):
                         raise Exception("Env file type not supported")
 
                     # environment overrides take precedence over env file overrides
-                    override["environment"] = [{"name": k, "value": v} for k, v in {**env_file_overrides, **{env["key"]: env["value"] for env in override["environment"]}}]
-                    
+                    override["environment"] = [
+                        {"name": k, "value": v}
+                        for k, v in {
+                            **env_file_overrides,
+                            **{
+                                env["key"]: env["value"]
+                                for env in override["environment"]
+                            },
+                        }
+                    ]
+
                     # sets URI used to retrieve credentials for local container
                     # uses user-defined URI for container
                     if os.environ.get("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", False):
-                        override["environment"].append({
-                            "name": "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
-                            "value": os.environ["AWS_CONTAINER_CREDENTIALS_RELATIVE_URI"]
-                        })
+                        override["environment"].append(
+                            {
+                                "name": "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
+                                "value": os.environ[
+                                    "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI"
+                                ],
+                            }
+                        )
                     else:
                         # uses task role ARN URI for container
-                        override["environment"].append({
-                        "name": "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", 
-                        "value": os.path.join(
-                            "/role-arn",
-                            hasattr(override, "taskRoleArn", task_def["taskRoleArn"])
+                        override["environment"].append(
+                            {
+                                "name": "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
+                                "value": os.path.join(
+                                    "/role-arn",
+                                    hasattr(
+                                        override, "taskRoleArn", task_def["taskRoleArn"]
+                                    ),
+                                ),
+                            }
                         )
-                    })
 
                 task_def["containerDefinitions"][idx] = {**container, **override}
                 break
@@ -94,6 +118,7 @@ def merge_overrides(task_def: str, overrides: overrides):
             task_def[k] == v
 
     return task_def
+
 
 def get_compose_dir(task_def, task_name):
     compose_dir_hash = sha1(
@@ -110,10 +135,10 @@ def add_compose_files(docker, compose_dir, task_def, task_name):
         os.makedirs(compose_dir)
 
         log.debug("Generating docker compose files")
-        task_compose_file = os.path.join(compose_dir, "docker-compose.ecs-local.tasks.yml")
-        generate_local_task_compose_file(
-            task_def, task_compose_file
+        task_compose_file = os.path.join(
+            compose_dir, "docker-compose.ecs-local.tasks.yml"
         )
+        generate_local_task_compose_file(task_def, task_compose_file)
         docker.client_config.compose_files.extend(
             glob(compose_dir + "/*[!override].yml")
             + glob(compose_dir + "/*override.yml")
@@ -121,16 +146,25 @@ def add_compose_files(docker, compose_dir, task_def, task_name):
         generate_local_compose_network_file(
             docker,
             os.path.join(compose_dir, "docker-compose.ecs-local.network-override.yml"),
-
         )
 
-    custom_compose_files = glob(os.path.join(COMPOSE_DEST, f"*.{task_name}.yml"))
-    docker.client_config.compose_files.extend(
-        [os.path.join(os.path.dirname(__file__), "docker-compose.local-endpoint.yml")]
-        + custom_compose_files
+    # order of list is important to ensure that the override compose files take precedence
+    # over original compose files
+    all_compose_files = (
+        glob(compose_dir + "/*[!override].yml")
+        + glob(compose_dir + "/*override.yml")
+        + [os.path.join(os.path.dirname(__file__), "docker-compose.local-endpoint.yml")]
+        + glob(os.path.join(COMPOSE_DEST, f"*.{task_name}.yml"))
     )
+    compose_files = set()
+    for path in all_compose_files:
+        if path not in docker.client_config.compose_files:
+            compose_files.add(path)
+
+    docker.client_config.compose_files.extend(list(compose_files))
 
     return docker
+
 
 def get_docker_compose_stack(request: RunTaskRequest):
     docker = DockerClient()
@@ -158,7 +192,7 @@ def get_docker_compose_stack(request: RunTaskRequest):
         log.info("Applying RunTask overrides to task definition")
         task_def = merge_overrides(task_def, request.overrides)
     log.debug(f"Merged Task Definition:\n{pformat(task_def)}")
-    
+
     compose_dir = get_compose_dir(task_def, task_name)
     log.debug("Docker compose directory: " + compose_dir)
 
@@ -182,23 +216,20 @@ def generate_local_compose_network_file(docker, path):
 
     file_content = {
         "version": "3.4",
-        "networks": {
-            ECS_NETWORK_NAME: {
-                "external": True
-            }
-        },
+        "networks": {ECS_NETWORK_NAME: {"external": True}},
         "services": {
-            service: {
-                "networks": {
-                    ECS_NETWORK_NAME: {
-                        "ipv4_address": assigned[i]
-                    }
-                }
-            } for i, service in enumerate(config.services)
-        }
+            service: {"networks": {ECS_NETWORK_NAME: {"ipv4_address": assigned[i]}}}
+            for i, service in enumerate(config.services)
+        },
     }
-    
+
     log.debug(f"Writing to path:\n{pformat(file_content)}")
     with open(path, "w+") as f:
         yaml.dump(file_content, f)
 
+
+def get_compose_failures(docker):
+
+    ps = docker.compose.ps()
+
+    log.debug("docker ps: " + str(ps))
