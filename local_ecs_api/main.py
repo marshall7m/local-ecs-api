@@ -10,7 +10,7 @@ from local_ecs_api.models import (
     RunTaskRequest,
     RunTaskResponse,
     DescribeTasksRequest,
-    ListTasksRequest
+    ListTasksRequest,
 )
 import logging
 
@@ -19,9 +19,11 @@ log.setLevel(logging.DEBUG)
 
 app = FastAPI()
 
+
 @app.post("/ListTasks")
 def list_tasks(request: ListTasksRequest) -> None:
     raise NotImplementedError
+
 
 @app.post("/DescribeTasks")
 def describe_tasks(request: DescribeTasksRequest) -> None:
@@ -34,16 +36,9 @@ def run_task(request: RunTaskRequest) -> RunTaskResponse:
     log.info("Running docker compose up")
     for i in range(request.count):
         log.debug(f"Count: {i+1}/{request.count}")
-        docker.compose.up(
-            build=True,
-            detach=True,
-            log_prefix=False
-        )
+        docker.compose.up(build=True, detach=True, log_prefix=False)
 
-    return RunTaskResponse(
-        failures=get_compose_failures(docker),
-        tasks=[]
-    )
+    return RunTaskResponse(failures=get_compose_failures(docker), tasks=[])
 
 
 @app.exception_handler(EcsAPIException)
@@ -53,7 +48,7 @@ async def ecs_api_exception_handler(_: Request, exc: EcsAPIException) -> JSONRes
     )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     from uvicorn import run
 
     run(app=app, port=8080)
