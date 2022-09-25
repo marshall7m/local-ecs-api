@@ -271,8 +271,11 @@ class RunTaskBackend:
         self.essential_containers = [
             c["name"]
             for c in self.docker_task.task_def["containerDefinitions"]
-            if c["essential"] == True
+            if c["essential"] is True
         ]
+        self.task_arn = (
+            f"arn:aws:ecs:{self.region}:{self.account_id}:task/{self.docker_task.id}"
+        )
 
     def pull(self):
         self.containers = self.docker_task.docker.ps()
@@ -290,6 +293,7 @@ class RunTaskBackend:
             "pullStartedAt": self.docker_task.created_at,
             "pullStoppedAt": self.docker_task.created_at,
             "startedAt": started_at,
+            "taskArn": self.task_arn,
         }
 
     def get_execution_stopped_at(self):
@@ -345,7 +349,7 @@ class RunTaskBackend:
                     networkInterfaces=[],
                     reason=c.state.error,
                     runtimeId=c.id,
-                    taskArn=f"arn:aws:ecs:{self.region}:{self.account_id}:task/{self.request.cluster}/{self.docker_task.task_name}",
+                    taskArn=self.task_arn,
                 )
             )
         return response
