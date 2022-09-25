@@ -225,12 +225,13 @@ class RunTaskResponse(BaseModel):
     tasks: List[Tasks] = List
 
 
-class DescribeTasksResponse(BaseModel):
-    failures: List[Failures] = List
-    tasks: List[Tasks] = List
-
-
 class DescribeTasksRequest(BaseModel):
+    cluster: Optional[str]
+    include: Optional[List[str]]
+    tasks: List[str]
+
+
+class DescribeTasksResponse(BaseModel):
     failures: List[Failures] = List
     tasks: List[Tasks] = List
 
