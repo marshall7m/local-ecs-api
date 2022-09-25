@@ -153,7 +153,16 @@ class DockerTask:
         return task_def
 
     def up(self, count: int):
+        docker = DockerClient(
+            compose_files=[
+                os.path.join(
+                    os.path.dirname(__file__), "docker-compose.local-endpoint.yml"
+                )
+            ]
+        )
+        docker.compose.up(detach=True)
 
+        log.debug("Running ")
         for i in range(count):
             log.debug(f"Count: {i+1}/{count}")
             self.docker.compose.up(build=True, detach=True, log_prefix=False)
