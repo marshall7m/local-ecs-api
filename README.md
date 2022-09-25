@@ -20,7 +20,11 @@ Configurable Environment Variables:
         - [x] Get task def content from user defined endpoint set via env var
         - [x] Parse task def and convert into docker compose file
         - [x] Run docker compose up with local-ecs-endpoint container service
-        - [] Exclude local ecs endpoint IP from task container ip assignment
-        - [] Formulate RunTaskResponse with docker container metadata
+        - [x] Exclude local ecs endpoint IP from task container ip assignment
+        - [x] Formulate RunTaskResponse with docker container metadata
+        - [ ] Add docker project as prefix to ecs-local-network to prevent future task's ecs endpoint IP conflicting with running local ecs endpoint
+        - [ ] By default add the taskRoleArn to the AWS_CONTAINER_CREDENTIALS_RELATIVE_URI env var for every container within task while ensuring no duplication of env vars
     - [] DescribeTasks
+        - [ ] implement test_describe_tasks() integration test
+
     - [] ListTasks?
