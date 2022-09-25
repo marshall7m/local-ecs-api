@@ -178,11 +178,6 @@ class DockerTask:
         all_compose_files = (
             glob(self.compose_dir + "/*[!override].yml")
             + glob(self.compose_dir + "/*override.yml")
-            + [
-                os.path.join(
-                    os.path.dirname(__file__), "docker-compose.local-endpoint.yml"
-                )
-            ]
             + glob(os.path.join(COMPOSE_DEST, f"*.{self.task_name}.yml"))
         )
         compose_files = set()
