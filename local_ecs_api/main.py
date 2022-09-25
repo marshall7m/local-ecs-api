@@ -1,8 +1,6 @@
-from typing import Any, Dict, List, Optional
-
 import pickle
 
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
@@ -13,6 +11,7 @@ from local_ecs_api.models import (
     DescribeTasksRequest,
     DescribeTasksResponse,
     ListTasksRequest,
+    ListTasksResponse,
     ECSBackend,
     RunTaskBackend,
 )
