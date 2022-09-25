@@ -34,14 +34,15 @@ except Exception:
     backend = ECSBackend(BACKEND_PATH)
 
 
-@app.post("/ListTasks", response_model=RunTaskResponse)
+@app.post("/ListTasks", response_model=ListTasksResponse)
 def list_tasks(request: ListTasksRequest) -> None:
-    return backend.list_tasks(request)
+    arns = backend.list_tasks()
+    return ListTasksResponse(taskArns=arns)
 
 
 @app.post("/DescribeTasks")
 def describe_tasks(request: DescribeTasksRequest) -> DescribeTasksResponse:
-    output = backend.describe_tasks(request.tasks, include=request.include)
+    output = backend.describe_tasks(tasks=request.tasks, include=request.include)
     return DescribeTasksResponse(**output)
 
 
@@ -52,7 +53,7 @@ def run_task(request: RunTaskRequest) -> RunTaskResponse:
     )
 
     backend.tasks[docker_task.id] = RunTaskBackend(request, docker_task)
-    output = backend.describe_tasks([docker_task.id])
+    output = backend.describe_tasks(tasks=[docker_task.id])
     log.debug(pformat(output))
     return RunTaskResponse(**output)
 
