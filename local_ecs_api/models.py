@@ -414,7 +414,7 @@ class ECSBackend:
 
         task.create_docker_compose_stack(overrides)
         log.info("Running docker compose up")
-        task.up(count, detach=True)
+        task.up(count)
 
         return task
 
