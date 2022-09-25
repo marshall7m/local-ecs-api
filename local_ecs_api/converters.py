@@ -19,6 +19,7 @@ from datetime import datetime
 from collections import defaultdict
 import uuid
 
+
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
 
@@ -129,78 +130,95 @@ class DockerTask:
         with open(self.hash_path, "w") as f:
             json.dump({"hash": compose_hash}, f)
 
+    def get_env_files():
+        env_file_overrides = {}
+        s3 = boto3.client(
+            "s3", endpoint_url=os.environ.get("S3_ENDPOINT_URL")
+        )
+        for env in overrides.get("environmentFiles", []):
+            log.debug("Merging env file overrides with env overrides")
+            if env["type"] == "s3":
+                parsed = urlparse(env["value"])
+                env_file = s3.get_object(
+                    Bucket=parsed.netloc,
+                    Key=parsed.path,
+                )["Body"].read()
+                iter_env = iter(env_file.split("="))
+                for v in iter_env:
+                    env_file_overrides[v] = next(iter_env)
+            else:
+                # TODO: get actual botocore exception (ECS.Client.exceptions.ClientException?)
+                raise Exception("Env file type not supported")
+            # environment overrides take precedence over env file overrides
+            override["environment"] = [
+                {"name": k, "value": v}
+                for k, v in {
+                    **env_file_overrides,
+                    **{
+                        env["key"]: env["value"]
+                        for env in override["environment"]
+                    },
+                }
+            ]
+
+#  sets URI used to retrieve credentials for local container
+#                         # uses user-defined URI for container
+#                         if os.environ.get(
+#                             "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", False
+#                         ):
+#                             override["environment"].append(
+#                                 {
+#                                     "name": "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
+#                                     "value": os.environ[
+#                                         "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI"
+#                                     ],
+#                                 }
+#                             )
+#                         else:
+#                             # uses task role ARN URI for container
+#                             override["environment"].append(
+#                                 {
+#                                     "name": "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
+#                                     "value": os.path.join(
+#                                         "/role-arn",
+#                                         hasattr(
+#                                             override,
+#                                             "taskRoleArn",
+#                                             task_def["taskRoleArn"],
+#                                         ),
+#                                     ),
+#                                 }
+#                             )
+
     def merge_overrides(self, task_def: str, overrides):
-        log.debug("Merging container overrides")
-        for override in overrides["containerOverrides"]:
-            for idx, container in enumerate(task_def["containerDefinitions"]):
-                if override["name"] == container["name"]:
-                    env_file_overrides = {}
-                    s3 = boto3.client(
-                        "s3", endpoint_url=os.environ.get("S3_ENDPOINT_URL")
-                    )
-                    for env in overrides.get("environmentFiles", []):
-                        log.debug("Merging env file overrides with env overrides")
-                        if env["type"] == "s3":
-                            parsed = urlparse(env["value"])
-                            env_file = s3.get_object(
-                                Bucket=parsed.netloc,
-                                Key=parsed.path,
-                            )["Body"].read()
-                            iter_env = iter(env_file.split("="))
-                            for v in iter_env:
-                                env_file_overrides[v] = next(iter_env)
-                        else:
-                            # TODO: get actual botocore exception (ECS.Client.exceptions.ClientException?)
-                            raise Exception("Env file type not supported")
-
-                        # environment overrides take precedence over env file overrides
-                        override["environment"] = [
-                            {"name": k, "value": v}
-                            for k, v in {
-                                **env_file_overrides,
-                                **{
-                                    env["key"]: env["value"]
-                                    for env in override["environment"]
-                                },
-                            }
-                        ]
-
-                        # sets URI used to retrieve credentials for local container
-                        # uses user-defined URI for container
-                        if os.environ.get(
-                            "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", False
-                        ):
-                            override["environment"].append(
-                                {
-                                    "name": "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
-                                    "value": os.environ[
-                                        "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI"
-                                    ],
-                                }
-                            )
-                        else:
-                            # uses task role ARN URI for container
-                            override["environment"].append(
-                                {
-                                    "name": "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
-                                    "value": os.path.join(
-                                        "/role-arn",
-                                        hasattr(
-                                            override,
-                                            "taskRoleArn",
-                                            task_def["taskRoleArn"],
-                                        ),
-                                    ),
-                                }
-                            )
-
-                    task_def["containerDefinitions"][idx] = {**container, **override}
-                    break
-
-        log.debug("Merging task overrides")
+        log.debug("Merging overrides")
         for k, v in overrides.items():
-            if k != "containerDefinitions":
+            if k != "containerOverrides":
                 task_def[k] = v
+            else:
+                for container_override in v:
+                    for idx, container in enumerate(task_def["containerDefinitions"]):
+                        if container_override["name"] == container["name"]:
+                            for attr, value in container_override.items():
+                                if attr == "environment":
+                                    task_def["containerDefinitions"][idx]["environment"] = [
+                                        {"key": key, "value": value} for key, value in {
+                                            **{env["key"]: env["value"] for env in container["environment"]},
+                                            **{env["key"]: env["value"] for env in value}, 
+                                        }.items()
+                                    ]
+                                elif attr == "environmentFiles":
+                                    for path in value:
+                                        if path not in task_def["containerDefinitions"][idx]["environmentFiles"]:
+                                            task_def["containerDefinitions"][idx]["environmentFiles"].append(path)
+                                elif attr == "resourceRequirements":
+                                    task_def["containerDefinitions"][idx]["resourceRequirements"] = [
+                                        {"type": key, "value": value} for key, value in {
+                                        **{env["type"]: env["value"] for env in value}, 
+                                        **{env["type"]: env["value"] for env in container["resourceRequirements"]}}
+                                    ]
+                                else:
+                                    task_def["containerDefinitions"][idx][attr] = value
 
         return task_def
 
