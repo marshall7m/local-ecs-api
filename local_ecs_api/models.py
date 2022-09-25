@@ -376,8 +376,12 @@ class ECSBackend:
         response = {"tasks": [], "failures": []}
 
         for t in tasks:
-            task_response = {}
-            # TODO convert any task arn that are passed in tasks before lookup
+            match = re.match(
+                "^arn:aws:ecs:(?P<region>[^:]+):(?P<account_id>[^:]+):(?P<service>[^:]+)/(?P<id>.*)$",
+                t,
+            )
+            if match:
+                t = match.groupdict()["id"]
             task = self.tasks[t]
             task.pull()
             # TODO change to docker.compose.ls once
