@@ -97,7 +97,7 @@ class Overrides(BaseModel):
 
 class RunTaskRequest(BaseModel):
     capacityProviderStrategy: Optional[List[CapacityProviderStrategy]]
-    cluster: Optional[str]
+    cluster: Optional[str] = "default"
     count: Optional[int] = 1
     enableECSManagedTags: Optional[bool]
     enableExecuteCommand: Optional[bool]
