@@ -54,7 +54,7 @@ class DockerTask:
             json.dump(task_def, tmp)
             tmp.flush()
 
-            cmd = f"ecs-cli local create --force --task-def-file {tmp.name} --output {path}"
+            cmd = f"ecs-cli local create --force --task-def-file {tmp.name} --output {path} --use-role"
             log.debug(f"Running command: {cmd}")
             subprocess.run(shlex.split(cmd), check=True)
 
