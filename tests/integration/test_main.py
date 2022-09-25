@@ -8,14 +8,70 @@ import os
 client = TestClient(app)
 
 
-@pytest.mark.skip("Not implemented")
+@mock_ecs
 def test_list_tasks():
-    pass
+    ecs = boto3.client("ecs")
+    task = ecs.register_task_definition(
+        containerDefinitions=[
+            {
+                "name": "sleep",
+                "command": [
+                    "sleep",
+                    "5",
+                ],
+                "cpu": 10,
+                "essential": True,
+                "image": "busybox",
+                "memory": 10,
+            },
+        ],
+        family="sleep5",
+        taskRoleArn="arn:aws:iam::12345679012:role/mock-task",
+    )
+
+    task_arn = client.post(
+        "/RunTask", json={"taskDefinition": task["taskDefinition"]["taskDefinitionArn"]}
+    ).json()["tasks"][0]["taskArn"]
+
+    response = client.post("/ListTasks", json={}).json()
+
+    assert task_arn in response["taskArns"]
 
 
-@pytest.mark.skip("Not implemented")
+@mock_ecs
 def test_describe_tasks():
-    pass
+    ecs = boto3.client("ecs")
+    task = ecs.register_task_definition(
+        containerDefinitions=[
+            {
+                "name": "sleep",
+                "command": [
+                    "sleep",
+                    "5",
+                ],
+                "cpu": 10,
+                "essential": True,
+                "image": "busybox",
+                "memory": 10,
+            },
+        ],
+        family="sleep5",
+        taskRoleArn="arn:aws:iam::12345679012:role/mock-task",
+    )
+
+    task_arn = client.post(
+        "/RunTask", json={"taskDefinition": task["taskDefinition"]["taskDefinitionArn"]}
+    ).json()["tasks"][0]["taskArn"]
+
+    response = client.post("/DescribeTasks", json={"tasks": [task_arn]})
+    assert response.status_code == 200
+    response_json = response.json()
+
+    # TODO: create proper expected response
+    assert response_json == {
+        "failures": [],
+        "tasks": [],
+    }
 
 
 @pytest.fixture(scope="function")
@@ -53,9 +109,10 @@ def test_run_task(aws_credentials):
     response = client.post(
         "/RunTask", json={"taskDefinition": task["taskDefinition"]["taskDefinitionArn"]}
     )
-    print(response.text)
     assert response.status_code == 200
     response_json = response.json()
+
+    # TODO: create proper expected response
     assert response_json == {
         "failures": [],
         "tasks": [],
