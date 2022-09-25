@@ -120,37 +120,6 @@ class DockerTask:
             + glob(self.compose_dir + "/*override.yml")
         )
 
-    def merge_overrides(self, task_def: str, overrides):
-        log.debug("Merging overrides")
-        for k, v in overrides.items():
-            if k != "containerOverrides":
-                task_def[k] = v
-            else:
-                for container_override in v:
-                    for idx, container in enumerate(task_def["containerDefinitions"]):
-                        if container_override["name"] == container["name"]:
-                            for attr, value in container_override.items():
-                                if attr == "environment":
-                                    task_def["containerDefinitions"][idx]["environment"] = [
-                                        {"key": key, "value": value} for key, value in {
-                                            **{env["key"]: env["value"] for env in container["environment"]},
-                                            **{env["key"]: env["value"] for env in value}, 
-                                        }.items()
-                                    ]
-                                elif attr == "environmentFiles":
-                                    for path in value:
-                                        if path not in task_def["containerDefinitions"][idx]["environmentFiles"]:
-                                            task_def["containerDefinitions"][idx]["environmentFiles"].append(path)
-                                elif attr == "resourceRequirements":
-                                    task_def["containerDefinitions"][idx]["resourceRequirements"] = [
-                                        {"type": key, "value": value} for key, value in {
-                                        **{env["type"]: env["value"] for env in value}, 
-                                        **{env["type"]: env["value"] for env in container["resourceRequirements"]}}
-                                    ]
-                                else:
-                                    task_def["containerDefinitions"][idx][attr] = value
-
-        return task_def
 
     def up(self, count: int):
         docker = DockerClient(
