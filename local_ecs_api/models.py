@@ -237,7 +237,20 @@ class DescribeTasksResponse(BaseModel):
 
 
 class ListTasksRequest(BaseModel):
-    pass
+    cluster: Optional[str]
+    containerInstance: Optional[str]
+    desiredStatus: Optional[str]
+    family: Optional[str]
+    launchType: Optional[str]
+    maxResults: Optional[int]
+    nextToken: Optional[str]
+    serviceName: Optional[str]
+    startedBy: Optional[str]
+
+
+class ListTasksResponse(BaseModel):
+    nextToken: Optional[str]
+    taskArns: List[str] = []
 
 
 class RunTaskBackend:
