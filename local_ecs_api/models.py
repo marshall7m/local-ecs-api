@@ -297,14 +297,12 @@ class RunTaskBackend:
         }
 
     def get_execution_stopped_at(self):
-        finished_ts = max(
-            [datetime.timestamp(c.state.finished_at) for c in self.containers]
-        )
+        finished_ts = [datetime.timestamp(c.state.finished_at) for c in self.containers]
 
         # containers that are still running return a negative timestamp
-        if finished_ts < 0:
+        if min(finished_ts) < 0:
             return 0
-        return min(finished_ts)
+        return max(finished_ts)
 
     def get_task_health_status(self):
         for c in self.containers:
