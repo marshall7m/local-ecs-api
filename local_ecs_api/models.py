@@ -1,157 +1,167 @@
 from pydantic import BaseModel
 from typing import List, Optional
 
-# TODO uppercase class names
+from local_ecs_api.converters import DockerTask
+
+import pickle
+import boto3
+import os
+import re
+from datetime import datetime
+import logging
+
+log = logging.getLogger(__file__)
+log.setLevel(logging.DEBUG)
 
 
-class capacityProviderStrategy(BaseModel):
+class CapacityProviderStrategy(BaseModel):
     base: int
     capacityProvider: str
     weight: int
 
 
-class awsvpcConfiguration(BaseModel):
+class AwsvpcConfiguration(BaseModel):
     assignPublicIp: str
     securityGroups: List[str]
     subnets: List[str]
 
 
-class networkConfiguration(BaseModel):
-    awsvpcConfiguration: awsvpcConfiguration
+class NetworkConfiguration(BaseModel):
+    awsvpcConfiguration: AwsvpcConfiguration
 
 
-class resourceRequirements(BaseModel):
+class ResourceRequirements(BaseModel):
     type: str
     value: str
 
 
-class environment(BaseModel):
+class Environment(BaseModel):
     name: str
     value: str
 
 
-class environmentFiles(BaseModel):
+class EnvironmentFiles(BaseModel):
     type: str
     value: str
 
 
-class containerOverrides(BaseModel):
+class ContainerOverrides(BaseModel):
     command: List[str]
     cpu: int
-    environment: List[environment]
-    environmentFiles: List[environmentFiles]
+    environment: List[Environment]
+    environmentFiles: List[EnvironmentFiles]
     memory: int
     memoryReservation: int
     name: str
-    resourceRequirements: List[resourceRequirements]
+    resourceRequirements: List[ResourceRequirements]
 
 
-class ephemeralStorage(BaseModel):
+class EphemeralStorage(BaseModel):
     sizeInGiB: int
 
 
-class deviceName(BaseModel):
+class DeviceName(BaseModel):
     deviceName: str
     deviceType: str
 
 
-class placementConstraints(BaseModel):
+class PlacementConstraints(BaseModel):
     expression: str
     type: str
 
 
-class placementStrategy(BaseModel):
+class PlacementStrategy(BaseModel):
     field: str
     type: str
 
 
-class tags(BaseModel):
+class Tags(BaseModel):
     key: str
     type: str
 
 
-class inferenceAccelerators(BaseModel):
+class InferenceAccelerators(BaseModel):
     deviceName: str
     deviceType: str
 
 
-class overrides(BaseModel):
-    containerOverrides: Optional[List[containerOverrides]]
+class Overrides(BaseModel):
+    containerOverrides: Optional[List[ContainerOverrides]]
     cpu: str
-    ephemeralStorage: ephemeralStorage
+    ephemeralStorage: EphemeralStorage
     executionRoleArn: str
-    inferenceAcceleratorOverrides: List[inferenceAccelerators]
+    inferenceAcceleratorOverrides: List[InferenceAccelerators]
     memory: str
     taskRoleArn: str
 
 
 class RunTaskRequest(BaseModel):
-    capacityProviderStrategy: Optional[List[capacityProviderStrategy]]
+    capacityProviderStrategy: Optional[List[CapacityProviderStrategy]]
     cluster: Optional[str]
     count: Optional[int] = 1
     enableECSManagedTags: Optional[bool]
     enableExecuteCommand: Optional[bool]
     group: Optional[str]
     launchType: Optional[str]
-    networkConfiguration: Optional[awsvpcConfiguration]
-    overrides: Optional[overrides]
-    placementConstraints: Optional[List[placementConstraints]]
-    placementStrategy: Optional[List[placementStrategy]]
+    networkConfiguration: Optional[AwsvpcConfiguration]
+    overrides: Optional[Overrides]
+    placementConstraints: Optional[List[PlacementConstraints]]
+    placementStrategy: Optional[List[PlacementStrategy]]
     platformVersion: Optional[str]
     propagateTags: Optional[str]
     propagateTags: Optional[str]
     referenceId: Optional[str]
     startedBy: Optional[str]
-    tags: Optional[List[tags]]
+    tags: Optional[List[Tags]]
     taskDefinition: str
 
 
-class failures(BaseModel):
+class Failures(BaseModel):
     arn: str
     detail: str
     reason: str
 
 
-class details(BaseModel):
+class Details(BaseModel):
     name: str
     value: str
 
 
-class attributes(BaseModel):
+class Attributes(BaseModel):
     name: str
     targetId: str
     targetType: str
     value: str
 
 
-class attachments(BaseModel):
+class Attachments(BaseModel):
     id: str
     status: str
     type: str
-    defails: List[details]
+    defails: List[Details]
 
 
-class managedAgents(BaseModel):
+class ManagedAgents(BaseModel):
     lastStartedAt: int
     lastStatus: str
     name: str
     reason: str
 
 
-class networkBindings(BaseModel):
+class NetworkBindings(BaseModel):
     bindIP: str
     containerPort: int
     hostPort: int
     protocol: str
 
 
-class networkInterfaces(BaseModel):
+class NetworkInterfaces(BaseModel):
     attachmentId: str
     ipv6Address: str
     privateIpv4Address: str
 
 
-class containers(BaseModel):
+class Containers(BaseModel):
     containerArn: str
     cpu: str
     exitCode: int
@@ -160,63 +170,69 @@ class containers(BaseModel):
     image: str
     imageDigest: str
     lastStatus: str
-    managedAgents: List[managedAgents]
+    managedAgents: List[ManagedAgents]
     memory: str
     memoryReservation: str
     name: str
-    networkBindings: List[networkBindings]
-    networkInterfaces: List[networkInterfaces]
+    networkBindings: List[NetworkBindings]
+    networkInterfaces: List[NetworkInterfaces]
     reason: str
     runtimeId: str
     taskArn: str
 
 
-class tasks(BaseModel):
-    attachments: List[attachments]
-    attributes: List[attributes]
-    availabilityZone: str
-    capacityProviderName: str
-    clusterArn: str
-    connectivity: str
-    connectivityAt: int
-    containerInstanceArn: str
-    cpu: str
-    createdAt: int
-    desiredStatus: str
-    enableExecuteCommand: bool
-    executionStoppedAt: int
-    group: str
-    healthStatus: str
-    lastStatus: str
-    launchType: str
-    memory: str
-    platformFamily: str
-    platformVersion: str
-    pullStartedAt: int
-    pullStoppedAt: int
-    startedAt: int
-    startedBy: str
-    stopCode: str
-    stoppedAt: int
-    stoppedReason: str
-    stoppingAt: int
-    taskArn: str
-    taskDefinitionArn: str
-    version: int
-    containers: List[containers]
-    ephemeralStorage: ephemeralStorage
-    inferenceAccelerators: List[inferenceAccelerators]
-    overrides: List[overrides]
-    tags: List[tags]
+class Tasks(BaseModel):
+    attachments: Optional[List[Attachments]]
+    attributes: Optional[List[Attributes]]
+    availabilityZone: Optional[str]
+    capacityProviderName: Optional[str]
+    clusterArn: Optional[str]
+    connectivity: Optional[str]
+    connectivityAt: Optional[int]
+    containerInstanceArn: Optional[str]
+    cpu: Optional[str]
+    createdAt: Optional[int]
+    desiredStatus: Optional[str]
+    enableExecuteCommand: Optional[bool]
+    executionStoppedAt: Optional[int]
+    group: Optional[str]
+    healthStatus: Optional[str]
+    lastStatus: Optional[str]
+    launchType: Optional[str]
+    memory: Optional[str]
+    platformFamily: Optional[str]
+    platformVersion: Optional[str]
+    pullStartedAt: Optional[int]
+    pullStoppedAt: Optional[int]
+    startedAt: Optional[int]
+    startedBy: Optional[str]
+    stopCode: Optional[str]
+    stoppedAt: Optional[int]
+    stoppedReason: Optional[str]
+    stoppingAt: Optional[int]
+    taskArn: Optional[str]
+    taskDefinitionArn: Optional[str]
+    version: Optional[int]
+    containers: Optional[List[Containers]]
+    ephemeralStorage: Optional[EphemeralStorage]
+    inferenceAccelerators: Optional[List[InferenceAccelerators]]
+    overrides: Optional[List[Overrides]]
+    tags: Optional[List[Tags]]
 
 
 class RunTaskResponse(BaseModel):
-    failures: List[failures] = List
-    tasks: List[tasks] = List
+    failures: List[Failures] = List
+    tasks: List[Tasks] = List
+
+
+class DescribeTasksResponse(BaseModel):
+    failures: List[Failures] = List
+    tasks: List[Tasks] = List
 
 
 class DescribeTasksRequest(BaseModel):
-    pass
+    failures: List[Failures] = List
+    tasks: List[Tasks] = List
 
 
 class ListTasksRequest(BaseModel):
