@@ -1,7 +1,12 @@
 version: '3.4'
 networks:
   ecs-local-network:
-    external: true
+    name: ecs-local-network
+    driver: bridge
+    ipam:
+      config:
+      - subnet: 169.254.170.0/24
+        gateway: 169.254.170.1
 services:
   ecs-local-endpoints:
     image: amazon/amazon-ecs-local-container-endpoints
@@ -9,12 +14,9 @@ services:
     - /var/run/docker.sock:/var/run/docker.sock
     - /usr/bin/docker:/usr/bin/docker
     environment:
+    # endpoints need to be set within local-ecs-api container
     - IAM_ENDPOINT
     - STS_ENDPOINT
     networks:
       ecs-local-network:
         ipv4_address: 169.254.170.2
-  sleep:
-    networks:
-      ecs-local-network:
-        ipv4_address: 169.254.170.3
