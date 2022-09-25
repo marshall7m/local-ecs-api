@@ -6,19 +6,15 @@ import json
 import yaml
 from hashlib import sha1
 import hmac
-import boto3
-import inspect
 from tempfile import NamedTemporaryFile
 import shlex
-from urllib.parse import urlparse
 from pprint import pformat
 from python_on_whales import DockerClient
-from python_on_whales.exceptions import DockerException
-import ipaddress, random, struct
+import ipaddress
+import random
+import struct
 from datetime import datetime
-from collections import defaultdict
 import uuid
-
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
