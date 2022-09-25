@@ -1,44 +1,61 @@
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI
+import pickle
+
+from fastapi import FastAPI, APIRouter
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from local_ecs_api.exceptions import EcsAPIException
-from local_ecs_api.converters import get_docker_compose_stack, get_compose_failures
 from local_ecs_api.models import (
     RunTaskRequest,
     RunTaskResponse,
     DescribeTasksRequest,
+    DescribeTasksResponse,
     ListTasksRequest,
+    ECSBackend,
+    RunTaskBackend,
 )
+import os
 import logging
+from pprint import pformat
 
 log = logging.getLogger(__file__)
 log.setLevel(logging.DEBUG)
 
+BACKEND_PATH = os.path.join(os.path.dirname(__file__), ".backend.pickle")
+
 app = FastAPI()
 
 
-@app.post("/ListTasks")
+try:
+    with open(BACKEND_PATH, "rb") as f:
+        backend = pickle.load(f)
+except Exception:
+    backend = ECSBackend(BACKEND_PATH)
+
+
+@app.post("/ListTasks", response_model=RunTaskResponse)
 def list_tasks(request: ListTasksRequest) -> None:
-    raise NotImplementedError
+    return backend.list_tasks(request)
 
 
 @app.post("/DescribeTasks")
-def describe_tasks(request: DescribeTasksRequest) -> None:
-    raise NotImplementedError
+def describe_tasks(request: DescribeTasksRequest) -> DescribeTasksResponse:
+    output = backend.describe_tasks(request.tasks, include=request.include)
+    return DescribeTasksResponse(**output)
 
 
 @app.post("/RunTask", response_model=RunTaskResponse)
 def run_task(request: RunTaskRequest) -> RunTaskResponse:
-    docker = get_docker_compose_stack(request)
-    log.info("Running docker compose up")
-    for i in range(request.count):
-        log.debug(f"Count: {i+1}/{request.count}")
-        docker.compose.up(build=True, detach=True, log_prefix=False)
+    docker_task = backend.run_task(
+        request.taskDefinition, request.overrides, request.count
+    )
 
-    return RunTaskResponse(failures=get_compose_failures(docker), tasks=[])
+    backend.tasks[docker_task.id] = RunTaskBackend(request, docker_task)
+    output = backend.describe_tasks([docker_task.id])
+    log.debug(pformat(output))
+    return RunTaskResponse(**output)
 
 
 @app.exception_handler(EcsAPIException)
