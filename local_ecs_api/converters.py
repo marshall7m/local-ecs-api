@@ -189,13 +189,3 @@ class DockerTask:
         log.debug(f"Writing to path:\n{pformat(file_content)}")
         with open(path, "w+") as f:
             yaml.dump(file_content, f)
-
-
-"""
-
-RunTaskBackend(DockerTask):
--> add DockerTask to self attr
-
-
-DockerTask -> scoped to running task def locally
-"""
