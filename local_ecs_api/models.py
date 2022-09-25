@@ -417,3 +417,11 @@ class ECSBackend:
         task.up(count, detach=True)
 
         return task
+
+    def list_tasks(self):
+        arns = []
+        for id, task in self.tasks.items():
+            # TODO implement request argument filters (see ListTasksRequest)
+            arns.append(task.task_arn)
+
+        return arns
