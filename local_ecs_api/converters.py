@@ -60,131 +60,65 @@ class DockerTask:
 
         return path
 
-    def get_docker_compose_stack(self):
-
-        if not os.path.exists(self.compose_dir):
-            raise Exception("compose dir does not exists -- task not runned")
-
-        log.debug("Docker compose directory: " + self.compose_dir)
-        self.add_compose_files()
-
-    def create_docker_compose_stack(self, overrides):
-        log.info("Creating ECS local Docker network")
-        try:
-            self.docker.network.create(
-                ECS_NETWORK_NAME,
-                attachable=True,
-                driver="bridge",
-                gateway="169.254.170.1",
-                subnet="169.254.170.0/24",
-            )
-        # TODO: create more granular docker catch
-        except DockerException:
-            log.info("Network already exists: " + ECS_NETWORK_NAME)
-
-        task_def = self.task_def
+    def create_docker_compose_stack(self, overrides=None):
+        compose_hash_input = [self.task_def]
+        overrides_def = None
         if overrides:
-            log.info("Applying RunTask overrides to task definition")
-            task_def = self.merge_overrides(self.task_def, overrides)
-            log.debug(f"Merged Task Definition:\n{pformat(task_def)}")
+            log.info("Creating overrides task definition")
+            overrides["containerDefinitions"] = overrides.pop("containerOverrides")
+            overrides_def = overrides
+            compose_hash_input.append(overrides_def)
 
-        self.generate_compose_files(task_def)
+        compose_hash = sha1()
+        for v in compose_hash_input:
+            compose_hash.update(
+                json.dumps(v, sort_keys=True, default=str).encode("cp037")
+            )
+        compose_hash = compose_hash.hexdigest()
 
-        self.add_compose_files()
-
-    def generate_compose_files(self, task_def):
-        compose_hash = sha1(
-            json.dumps(task_def, sort_keys=True, default=str).encode("cp037")
-        ).hexdigest()
-
+        generate = False
         if os.path.exists(self.hash_path):
             with open(self.hash_path, "r") as f:
                 cache_hash = json.load(f)["hash"]
 
             if hmac.compare_digest(str(compose_hash), str(cache_hash)):
-                log.debug("Using cache docker compose directory")
-                return
+                log.info("Using cache docker compose directory")
+            else:
+                generate = True
+        else:
+            log.debug("Cache compose hash file doesn't exist")
+            generate = True
 
-        log.debug("Generating docker compose files")
+        if generate:
+            log.info("Generating docker compose files")
+            self.generate_compose_files(self.task_def, overrides_def)
 
+            log.info("Creating/modifying compose hash file")
+            with open(self.hash_path, "w") as f:
+                log.debug(f"New hash: {compose_hash}")
+                json.dump({"hash": compose_hash}, f)
+
+        self.add_compose_files()
+
+    def generate_compose_files(self, task_def, overrides_def):
+        os.makedirs(self.compose_dir, exist_ok=True)
         self.generate_local_task_compose_file(
             task_def,
             os.path.join(self.compose_dir, "docker-compose.ecs-local.tasks.yml"),
         )
 
+        if overrides_def:
+            self.generate_local_task_compose_file(
+                overrides_def,
+                os.path.join(
+                    self.compose_dir, "docker-compose.ecs-local.run-task-override.yml"
+                ),
+            )
+
         self.docker.client_config.compose_files.extend(
             glob(self.compose_dir + "/*[!override].yml")
             + glob(self.compose_dir + "/*override.yml")
         )
-        self.generate_local_compose_network_file(
-            os.path.join(
-                self.compose_dir, "docker-compose.ecs-local.network-override.yml"
-            )
-        )
-
-        log.debug("Creating/modifying compose hash file")
-        with open(self.hash_path, "w") as f:
-            json.dump({"hash": compose_hash}, f)
-
-    def get_env_files():
-        env_file_overrides = {}
-        s3 = boto3.client(
-            "s3", endpoint_url=os.environ.get("S3_ENDPOINT_URL")
-        )
-        for env in overrides.get("environmentFiles", []):
-            log.debug("Merging env file overrides with env overrides")
-            if env["type"] == "s3":
-                parsed = urlparse(env["value"])
-                env_file = s3.get_object(
-                    Bucket=parsed.netloc,
-                    Key=parsed.path,
-                )["Body"].read()
-                iter_env = iter(env_file.split("="))
-                for v in iter_env:
-                    env_file_overrides[v] = next(iter_env)
-            else:
-                # TODO: get actual botocore exception (ECS.Client.exceptions.ClientException?)
-                raise Exception("Env file type not supported")
-            # environment overrides take precedence over env file overrides
-            override["environment"] = [
-                {"name": k, "value": v}
-                for k, v in {
-                    **env_file_overrides,
-                    **{
-                        env["key"]: env["value"]
-                        for env in override["environment"]
-                    },
-                }
-            ]
-
-#  sets URI used to retrieve credentials for local container
-#                         # uses user-defined URI for container
-#                         if os.environ.get(
-#                             "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", False
-#                         ):
-#                             override["environment"].append(
-#                                 {
-#                                     "name": "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
-#                                     "value": os.environ[
-#                                         "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI"
-#                                     ],
-#                                 }
-#                             )
-#                         else:
-#                             # uses task role ARN URI for container
-#                             override["environment"].append(
-#                                 {
-#                                     "name": "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
-#                                     "value": os.path.join(
-#                                         "/role-arn",
-#                                         hasattr(
-#                                             override,
-#                                             "taskRoleArn",
-#                                             task_def["taskRoleArn"],
-#                                         ),
-#                                     ),
-#                                 }
-#                             )
 
     def merge_overrides(self, task_def: str, overrides):
         log.debug("Merging overrides")
