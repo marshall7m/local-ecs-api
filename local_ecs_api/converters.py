@@ -168,7 +168,7 @@ class DockerTask:
             self.docker.compose.up(build=True, detach=True, log_prefix=False)
         # TODO create more precise ts by using while proj state != "running"
 
-        self.id = uuid.uuid4()
+        self.id = str(uuid.uuid4())
         self.created_at = datetime.timestamp(datetime.now())
 
     def add_compose_files(self):
