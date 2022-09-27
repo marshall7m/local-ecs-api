@@ -120,7 +120,6 @@ class DockerTask:
             + glob(self.compose_dir + "/*override.yml")
         )
 
-
     def up(self, count: int):
         docker = DockerClient(
             compose_files=[

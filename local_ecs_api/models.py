@@ -268,6 +268,10 @@ class RunTaskBackend:
         self.region = aws_attr["region"]
         self.account_id = aws_attr["account_id"]
 
+        self.service_names = [
+            c["name"] for c in self.docker_task.task_def["containerDefinitions"]
+        ]
+
         self.essential_containers = [
             c["name"]
             for c in self.docker_task.task_def["containerDefinitions"]
@@ -280,12 +284,27 @@ class RunTaskBackend:
     def pull(self):
         self.containers = self.docker_task.docker.ps()
 
+    def is_failure(self):
+        for id in self.containers:
+            if self.docker_task.docker.container.inspect(id).state.exit_code != 0:
+                return True
+
+        return False
+
+    def get_status(self):
+        for proj in self.docker_task.docker.compose.ls():
+            if proj["Name"] == self.docker_task.compose_project_name:
+                # remove status count (e.g. running(1) -> running)
+                status = re.sub(r"\([0-9]+\)$", "", proj["Status"])
+                if status == "running":
+                    return "RUNNING"
+                elif status == "exited":
+                    return "STOPPED"
+
     def get_task(self):
         started_at = min([datetime.timestamp(c.created) for c in self.containers])
         return {
-            # TODO change to docker.compose.ls once
-            # supported: https://github.com/gabrieldemarmiesse/python-on-whales/issues/367
-            "lastStatus": "success",
+            "lastStatus": self.get_status(),
             "createdAt": self.docker_task.created_at,
             "executionStoppedAt": self.get_execution_stopped_at(),
             "healthStatus": self.get_task_health_status(),
@@ -382,9 +401,7 @@ class ECSBackend:
                 t = match.groupdict()["id"]
             task = self.tasks[t]
             task.pull()
-            # TODO change to docker.compose.ls once
-            # supported: https://github.com/gabrieldemarmiesse/python-on-whales/issues/367
-            if "success" == "failure":
+            if task.is_failure():
                 response.failures.append(
                     Failures(
                         arn=task.arn,
