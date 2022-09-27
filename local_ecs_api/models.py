@@ -433,10 +433,37 @@ class ECSBackend:
 
         return task
 
-    def list_tasks(self):
+    def list_tasks(
+        self,
+        cluster: Optional[str] = None,
+        family: Optional[str] = None,
+        launch_type: Optional[str] = None,
+        service_name: Optional[str] = None,
+        desired_status: Optional[str] = None,
+        started_by: Optional[str] = None,
+        container_instance: Optional[str] = None,
+        max_results: Optional[int] = None,
+    ):
         arns = []
         for id, task in self.tasks.items():
-            # TODO implement request argument filters (see ListTasksRequest)
+            if cluster is not None and task.cluster != cluster:
+                continue
+            elif family is not None and task.family != family:
+                continue
+            elif launch_type is not None and task.launch_type != launch_type:
+                continue
+            elif service_name is not None and service_name not in task.service_names:
+                continue
+            elif desired_status is not None and task.get_status() != desired_status:
+                continue
+            elif started_by is not None and task.startedby != started_by:
+                continue
+            elif (
+                container_instance is not None
+                and task.container_instance != container_instance
+            ):
+                continue
+
             arns.append(task.task_arn)
 
-        return arns
+        return arns[:max_results]

@@ -11,6 +11,7 @@ client = TestClient(app)
 @mock_ecs
 def test_list_tasks():
     ecs = boto3.client("ecs")
+
     task = ecs.register_task_definition(
         containerDefinitions=[
             {
@@ -29,13 +30,29 @@ def test_list_tasks():
         taskRoleArn="arn:aws:iam::12345679012:role/mock-task",
     )
 
-    task_arn = client.post(
-        "/RunTask", json={"taskDefinition": task["taskDefinition"]["taskDefinitionArn"]}
-    ).json()["tasks"][0]["taskArn"]
+    run_task = client.post(
+        "/RunTask",
+        json={
+            "taskDefinition": task["taskDefinition"]["taskDefinitionArn"],
+            "cluster": "test-cluster",
+            "launchType": "FARGATE",
+            "startedBy": "tester",
+        },
+    ).json()["tasks"][0]
 
-    response = client.post("/ListTasks", json={}).json()
+    response = client.post(
+        "/ListTasks",
+        json={
+            "cluster": run_task["clusterArn"],
+            "family": "test",
+            "launchType": run_task["launchType"],
+            "serviceName": task["taskDefinition"]["containerDefinition"][0]["name"],
+            "startedBy": task["startedBy"],
+            "desiredStatus": "STOPPED",
+        },
+    ).json()
 
-    assert task_arn in response["taskArns"]
+    assert run_task["taskArn"] in response["taskArns"]
 
 
 @mock_ecs
