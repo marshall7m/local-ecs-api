@@ -8,8 +8,19 @@ import os
 client = TestClient(app)
 
 
+@pytest.fixture(scope="function")
+def aws_credentials():
+    """Mocked AWS Credentials for moto."""
+    os.environ["AWS_ACCESS_KEY_ID"] = "testing"
+    os.environ["AWS_SECRET_ACCESS_KEY"] = "testing"
+    os.environ["AWS_SECURITY_TOKEN"] = "testing"
+    os.environ["AWS_SESSION_TOKEN"] = "testing"
+    os.environ["AWS_REGION"] = "us-east-1"
+    os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
+
+
 @mock_ecs
-def test_list_tasks():
+def test_list_tasks(aws_credentials):
     ecs = boto3.client("ecs")
 
     task = ecs.register_task_definition(
@@ -46,8 +57,8 @@ def test_list_tasks():
             "cluster": run_task["clusterArn"],
             "family": "test",
             "launchType": run_task["launchType"],
-            "serviceName": task["taskDefinition"]["containerDefinition"][0]["name"],
-            "startedBy": task["startedBy"],
+            "serviceName": run_task["containers"][0]["name"],
+            "startedBy": run_task["startedBy"],
             "desiredStatus": "STOPPED",
         },
     ).json()
@@ -56,7 +67,7 @@ def test_list_tasks():
 
 
 @mock_ecs
-def test_describe_tasks():
+def test_describe_tasks(aws_credentials):
     ecs = boto3.client("ecs")
     task = ecs.register_task_definition(
         containerDefinitions=[
@@ -89,17 +100,6 @@ def test_describe_tasks():
         "failures": [],
         "tasks": [],
     }
-
-
-@pytest.fixture(scope="function")
-def aws_credentials():
-    """Mocked AWS Credentials for moto."""
-    os.environ["AWS_ACCESS_KEY_ID"] = "testing"
-    os.environ["AWS_SECRET_ACCESS_KEY"] = "testing"
-    os.environ["AWS_SECURITY_TOKEN"] = "testing"
-    os.environ["AWS_SESSION_TOKEN"] = "testing"
-    os.environ["AWS_REGION"] = "us-east-1"
-    os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
 
 
 @mock_ecs
