@@ -2,11 +2,12 @@ from pydantic import BaseModel
 from typing import List, Optional
 
 from local_ecs_api.converters import DockerTask
-
+from python_on_whales.utils import run
 import pickle
 import boto3
 import os
 import re
+import json
 from datetime import datetime
 import logging
 
@@ -360,8 +361,8 @@ class RunTaskBackend:
     def get_containers(self) -> List[Containers]:
         response = []
 
-        for id in self.containers:
-            c = self.docker_task.docker.container.inspect(id)
+        for c_id in self.containers:
+            c = self.docker_task.docker.container.inspect(c_id)
             response.append(
                 Containers(
                     containerArn=f"arn:aws:ecs:{self.region}:{self.account_id}:container/{c.id}",
@@ -419,7 +420,7 @@ class ECSBackend:
             task = self.tasks[t]
             task.pull()
             if task.is_failure():
-                response.failures.append(
+                response["failures"].append(
                     Failures(
                         arn=task.arn,
                         detail=task.logs,
