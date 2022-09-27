@@ -292,14 +292,31 @@ class RunTaskBackend:
         return False
 
     def get_status(self):
-        for proj in self.docker_task.docker.compose.ls():
-            if proj["Name"] == self.docker_task.compose_project_name:
+        full_cmd = self.docker_task.docker.docker_compose_cmd + [
+            "ls",
+            "--format",
+            "json",
+            "--all",
+        ]
+        for proj in json.loads(run(full_cmd)):
+            if (
+                proj["Name"]
+                == self.docker_task.docker.compose.client_config.compose_project_name
+            ):
                 # remove status count (e.g. running(1) -> running)
                 status = re.sub(r"\([0-9]+\)$", "", proj["Status"])
                 if status == "running":
                     return "RUNNING"
                 elif status == "exited":
                     return "STOPPED"
+        # uncomment and replace above with once PR is merged: https://github.com/gabrieldemarmiesse/python-on-whales/pull/368
+        # for proj in self.docker_task.docker.compose.ls():
+        #     if proj.name == self.docker_task.compose_project_name:
+        #         # remove status count (e.g. running(1) -> running)
+        #         if proj.status == "running":
+        #             return "RUNNING"
+        #         elif proj.status == "exited":
+        #             return "STOPPED"
 
     def get_task(self):
         started_at = min([datetime.timestamp(c.created) for c in self.containers])
