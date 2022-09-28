@@ -271,9 +271,7 @@ class RunTaskBackend:
         self.region = aws_attr["region"]
         self.account_id = aws_attr["account_id"]
 
-        self.service_names = [
-            c["name"] for c in self.docker_task.task_def["containerDefinitions"]
-        ]
+        self.service_names = []
 
         self.essential_containers = [
             c["name"]
@@ -287,6 +285,7 @@ class RunTaskBackend:
     def pull(self) -> None:
         """Gets refreshed results from running `docker compose ls` within docker project"""
         self.containers = self.docker_task.docker.ps()
+        self.service_names = [c.name for c in self.containers]
 
     def is_failure(self) -> bool:
         """Returns True if task contains any containers that have failed and True otherwise"""
