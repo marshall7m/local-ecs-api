@@ -103,7 +103,7 @@ class RunTaskRequest(BaseModel):
     cluster: Optional[str] = "default"
     count: Optional[int] = 1
     enableECSManagedTags: Optional[bool]
-    enableExecuteCommand: Optional[bool]
+    enableExecuteCommand: Optional[bool] = False
     group: Optional[str]
     launchType: Optional[str]
     networkConfiguration: Optional[AwsvpcConfiguration]
@@ -266,10 +266,12 @@ class RunTaskBackend:
         self.request = request
         self.docker_task = docker_task
         self.metadata = {}
+        self.containers = None
 
         aws_attr = self._parse_arn(self.docker_task.task_def_arn)
         self.region = aws_attr["region"]
         self.account_id = aws_attr["account_id"]
+        self.cluster_arn = f"arn:aws:ecs:{self.region}:{self.account_id}:cluster/{self.request.cluster}"
 
         self.service_names = []
 
