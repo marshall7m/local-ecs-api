@@ -37,14 +37,13 @@ def random_ip(network):
 
 
 class DockerTask:
-    def __init__(self, task_def, docker=DockerClient()):
-        self.docker = docker
-
+    def __init__(self, task_def):
         self.task_def = task_def["taskDefinition"]
         self.task_def_arn = self.task_def["taskDefinitionArn"]
         self.task_name = self.task_def_arn.split("task-definition/")[-1].replace(
             ":", "-"
         )
+        self.docker = DockerClient(compose_project_name=self.task_name)
         self.compose_dir = os.path.join(COMPOSE_DEST, f".{self.task_name}-compose")
         self.hash_path = os.path.join(self.compose_dir, "compose-hash.json")
 
