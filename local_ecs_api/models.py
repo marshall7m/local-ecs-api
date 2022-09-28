@@ -324,7 +324,37 @@ class RunTaskBackend:
         #         elif proj.status == "exited":
         #             return "STOPPED"
 
-    def get_task(self):
+    def get_attachments(self) -> List[Attachments]:
+        """
+        Returns list of docker compose project attributes translated to the ECS
+        response attachment attribute
+        """
+        attachments = []
+        for name in list(self.docker_task.docker.compose.config().networks.keys()):
+            network = self.docker_task.docker.network.inspect(name)
+            ipv4 = ""
+            for cfg in network.ipam.config:
+                if cfg.get("Gateway"):
+                    ipv4 = cfg.get("Gateway")
+                    break
+            attachments.append(
+                Attachments(
+                    id=network.id,
+                    type=network.driver,
+                    status="RUNNING",
+                    defails=[
+                        Details(name="privateDnsName", value=network.name),
+                        Details(name="privateIPv4Address", value=ipv4),
+                    ],
+                )
+            )
+        return attachments
+
+    def get_task(self) -> Dict[str, Any]:
+        """
+        Returns docker compose project attributes to merge into the Task model
+        response
+        """
         started_at = min([datetime.timestamp(c.created) for c in self.containers])
         return {
             "lastStatus": self.get_status(),
@@ -335,7 +365,21 @@ class RunTaskBackend:
             "pullStartedAt": self.docker_task.created_at,
             "pullStoppedAt": self.docker_task.created_at,
             "startedAt": started_at,
+            "availabilityZone": self.region,
+            "attachments": self.get_attachments(),
+            "clusterArn": self.cluster_arn,
             "taskArn": self.task_arn,
+            # TODO placeholder
+            "connectivity": "CONNECTED",
+            "connectivityAt": self.docker_task.created_at,
+            "cpu": getattr(getattr(self.request, "overrides"), "cpu", None)
+            or self.docker_task.task_def.get("cpu"),
+            "desiredStatus": "RUNNING",
+            # "group": self.docker_task.task_def["family"],
+            "memory": getattr(getattr(self.request, "overrides"), "memory", None)
+            or self.docker_task.task_def.get("memory"),
+            "platformFamily": self.containers[0].platform,
+            "taskDefinitionArn": self.docker_task.task_def_arn,
         }
 
     def get_execution_stopped_at(self) -> int:
@@ -350,7 +394,12 @@ class RunTaskBackend:
             return 0
         return max(finished_ts)
 
-    def get_task_health_status(self):
+    def get_task_health_status(self) -> str:
+        """
+        Returns the health status of first container that reports a status other
+        than `healthy` or returns a health status of `healthy` if all containers
+        have a health status of healthy
+        """
         for c in self.containers:
             if c.name in self.essential_containers:
                 status = getattr(c.state, "health", "UKNOWN")
