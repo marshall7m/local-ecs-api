@@ -17,7 +17,6 @@ from local_ecs_api.models import (
 )
 import os
 import logging
-from pprint import pformat
 
 log = logging.getLogger(__file__)
 log.setLevel(logging.DEBUG)
@@ -30,17 +29,26 @@ app = FastAPI()
 try:
     with open(BACKEND_PATH, "rb") as f:
         backend = pickle.load(f)
-except Exception:
+except FileNotFoundError:
     backend = ECSBackend(BACKEND_PATH)
 
 
 @app.post("/ListTasks", response_model=ListTasksResponse)
-def list_tasks(request: ListTasksRequest) -> None:
-    arns = backend.list_tasks()
+def list_tasks(request: ListTasksRequest) -> ListTasksResponse:
+    arns = backend.list_tasks(
+        cluster=request.cluster,
+        family=request.family,
+        launch_type=request.launchType,
+        service_name=request.serviceName,
+        desired_status=request.desiredStatus,
+        started_by=request.startedBy,
+        container_instance=request.containerInstance,
+        max_results=request.maxResults,
+    )
     return ListTasksResponse(taskArns=arns)
 
 
-@app.post("/DescribeTasks")
+@app.post("/DescribeTasks", response_model=DescribeTasksResponse)
 def describe_tasks(request: DescribeTasksRequest) -> DescribeTasksResponse:
     output = backend.describe_tasks(tasks=request.tasks, include=request.include)
     return DescribeTasksResponse(**output)
@@ -54,7 +62,6 @@ def run_task(request: RunTaskRequest) -> RunTaskResponse:
 
     backend.tasks[docker_task.id] = RunTaskBackend(request, docker_task)
     output = backend.describe_tasks(tasks=[docker_task.id])
-    log.debug(pformat(output))
     return RunTaskResponse(**output)
 
 
