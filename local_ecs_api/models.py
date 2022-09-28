@@ -1,15 +1,17 @@
-from pydantic import BaseModel
-from typing import List, Optional
-
-from local_ecs_api.converters import DockerTask
-from python_on_whales.utils import run
-import pickle
-import boto3
 import os
 import re
 import json
 from datetime import datetime
 import logging
+from typing import List, Optional, Any, Dict
+import pickle
+
+from pydantic import BaseModel
+from python_on_whales.utils import run
+import boto3
+
+from local_ecs_api.converters import DockerTask
+
 
 log = logging.getLogger(__file__)
 log.setLevel(logging.DEBUG)
@@ -282,17 +284,20 @@ class RunTaskBackend:
             f"arn:aws:ecs:{self.region}:{self.account_id}:task/{self.docker_task.id}"
         )
 
-    def pull(self):
+    def pull(self) -> None:
+        """Gets refreshed results from running `docker compose ls` within docker project"""
         self.containers = self.docker_task.docker.ps()
 
-    def is_failure(self):
-        for id in self.containers:
-            if self.docker_task.docker.container.inspect(id).state.exit_code != 0:
+    def is_failure(self) -> bool:
+        """Returns True if task contains any containers that have failed and True otherwise"""
+        for c_id in self.containers:
+            if self.docker_task.docker.container.inspect(c_id).state.exit_code != 0:
                 return True
 
         return False
 
-    def get_status(self):
+    def get_status(self) -> str:
+        """Returns Docker compose project status translated to lastStatus response attribute"""
         full_cmd = self.docker_task.docker.docker_compose_cmd + [
             "ls",
             "--format",
@@ -333,7 +338,11 @@ class RunTaskBackend:
             "taskArn": self.task_arn,
         }
 
-    def get_execution_stopped_at(self):
+    def get_execution_stopped_at(self) -> int:
+        """
+        Returns the timestamp of when all containers within the compose project have finished
+        or returns `0` if any containers are still running
+        """
         finished_ts = [datetime.timestamp(c.state.finished_at) for c in self.containers]
 
         # containers that are still running return a negative timestamp
@@ -351,7 +360,8 @@ class RunTaskBackend:
                     return status
 
     @staticmethod
-    def _parse_arn(resource_arn):
+    def _parse_arn(resource_arn: str) -> Dict[str, Any]:
+        """Parses ECS-related ARN into dictionary"""
         match = re.match(
             "^arn:aws:ecs:(?P<region>[^:]+):(?P<account_id>[^:]+):(?P<service>[^:]+)/(?P<id>.*)$",
             resource_arn,
@@ -359,6 +369,9 @@ class RunTaskBackend:
         return match.groupdict()
 
     def get_containers(self) -> List[Containers]:
+        """
+        Returns docker compose projects attributes translated into the response Container model
+        """
         response = []
 
         for c_id in self.containers:
@@ -399,7 +412,7 @@ class ECSBackend:
         with open(self.pickle_path, "wb") as f:
             pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
 
-    def describe_tasks(self, tasks: List[str], include=[]):
+    def describe_tasks(self, tasks: List[str], include=[]) -> Dict[str, Any]:
         """
         Returns ECS DescribeTask response replaced with local docker compose container values
 
@@ -439,7 +452,17 @@ class ECSBackend:
 
         return response
 
-    def run_task(self, task_def_arn, overrides, count):
+    def run_task(
+        self, task_def_arn: str, overrides: Overrides, count: int
+    ) -> DockerTask:
+        """
+        Returns ECS RunTask response replaced with local docker compose container values
+
+        Arguments:
+            task_def_arn: List of task IDs or ARNs
+            overrides: ECS task and container overrides
+            count: Number of duplicate compose projects to run
+        """
         ecs = boto3.client("ecs", endpoint_url=os.environ.get("ECS_ENDPOINT_URL"))
 
         task_def = ecs.describe_task_definition(taskDefinition=task_def_arn)
