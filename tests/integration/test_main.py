@@ -1,11 +1,79 @@
+import os
+import uuid
+
 import pytest
 from fastapi.testclient import TestClient
-from local_ecs_api.main import app
 from moto import mock_ecs
 import boto3
-import os
+
+from local_ecs_api.main import app
 
 client = TestClient(app)
+
+task_def = {
+    "fast_fail": {
+        "containerDefinitions": [
+            {
+                "name": "exit",
+                "command": [
+                    "/bin/sh",
+                    "fail",
+                ],
+                "cpu": 1,
+                "essential": True,
+                "image": "busybox",
+                "memory": 10,
+            }
+        ],
+        "family": "fast_fail",
+        "taskRoleArn": "arn:aws:iam::12345679012:role/mock-task",
+    },
+    "essential_success": {
+        "containerDefinitions": [
+            {
+                "name": "sleep",
+                "command": [
+                    "sleep",
+                    "5",
+                ],
+                "cpu": 10,
+                "essential": True,
+                "image": "busybox",
+                "memory": 10,
+            },
+        ],
+        "family": "essential_success",
+        "taskRoleArn": "arn:aws:iam::12345679012:role/mock-task",
+    },
+    "fast_success": {
+        "containerDefinitions": [
+            {
+                "name": "shell",
+                "command": ["/bin/bash"],
+                "cpu": 1,
+                "essential": True,
+                "image": "busybox",
+                "memory": 10,
+            },
+        ],
+        "family": "fast_success",
+        "taskRoleArn": "arn:aws:iam::12345679012:role/mock-task",
+    },
+    "invalid_img": {
+        "containerDefinitions": [
+            {
+                "name": "shell",
+                "command": ["/bin/bash"],
+                "cpu": 1,
+                "essential": True,
+                "image": f"invalid:{uuid.uuid4()}",
+                "memory": 10,
+            },
+        ],
+        "family": "invalid_img",
+        "taskRoleArn": "arn:aws:iam::12345679012:role/mock-task",
+    },
+}
 
 
 @pytest.fixture(scope="function")
@@ -22,30 +90,14 @@ def aws_credentials():
 @mock_ecs
 def test_list_tasks(aws_credentials):
     ecs = boto3.client("ecs")
-
-    task = ecs.register_task_definition(
-        containerDefinitions=[
-            {
-                "name": "sleep",
-                "command": [
-                    "sleep",
-                    "5",
-                ],
-                "cpu": 10,
-                "essential": True,
-                "image": "busybox",
-                "memory": 10,
-            },
-        ],
-        family="sleep5",
-        taskRoleArn="arn:aws:iam::12345679012:role/mock-task",
-    )
+    cluster = "test-cluster"
+    task = ecs.register_task_definition("")
 
     run_task = client.post(
         "/RunTask",
         json={
             "taskDefinition": task["taskDefinition"]["taskDefinitionArn"],
-            "cluster": "test-cluster",
+            "cluster": cluster,
             "launchType": "FARGATE",
             "startedBy": "tester",
         },
@@ -54,8 +106,8 @@ def test_list_tasks(aws_credentials):
     response = client.post(
         "/ListTasks",
         json={
-            "cluster": run_task["clusterArn"],
-            "family": "test",
+            "cluster": cluster,
+            "family": task["taskDefinition"]["family"],
             "launchType": run_task["launchType"],
             "serviceName": run_task["containers"][0]["name"],
             "startedBy": run_task["startedBy"],
@@ -103,25 +155,9 @@ def test_describe_tasks(aws_credentials):
 
 
 @mock_ecs
-def test_run_task(aws_credentials):
+def test_run_task_with_failure(aws_credentials):
     ecs = boto3.client("ecs")
-    task = ecs.register_task_definition(
-        containerDefinitions=[
-            {
-                "name": "sleep",
-                "command": [
-                    "sleep",
-                    "5",
-                ],
-                "cpu": 10,
-                "essential": True,
-                "image": "busybox",
-                "memory": 10,
-            },
-        ],
-        family="sleep5",
-        taskRoleArn="arn:aws:iam::12345679012:role/mock-task",
-    )
+    task = ecs.register_task_definition(**task_def["fast_fail"])
 
     response = client.post(
         "/RunTask", json={"taskDefinition": task["taskDefinition"]["taskDefinitionArn"]}
