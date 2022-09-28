@@ -485,12 +485,13 @@ class ECSBackend:
             if task.is_failure():
                 response["failures"].append(
                     Failures(
-                        arn=task.arn,
-                        detail=task.logs,
+                        arn=task.task_arn,
+                        detail="placeholder-details",
                         # TODO: use exception message instead
                         reason="placeholder-reason",
                     )
                 )
+                continue
 
             response["tasks"].append(
                 Tasks(
