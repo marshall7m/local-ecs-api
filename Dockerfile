@@ -1,8 +1,8 @@
-FROM python:3.9-slim-buster
+FROM tiangolo/uvicorn-gunicorn:python3.9
 LABEL maintainer="Marshall Mamiya"
 # COPY LICENSE /app
 WORKDIR /app
-
+EXPOSE 8000
 COPY ./install.sh /app/install.sh
 COPY ./pyproject.toml /app/pyproject.toml
 RUN bash ./install.sh && pip install .
