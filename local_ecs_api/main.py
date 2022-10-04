@@ -1,8 +1,9 @@
 import pickle
+import requests
 
 from fastapi import FastAPI
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 
 from local_ecs_api.exceptions import EcsAPIException
 from local_ecs_api.models import (
@@ -33,8 +34,18 @@ except FileNotFoundError:
     backend = ECSBackend(BACKEND_PATH)
 
 
+@app.middleware("http")
+async def add_resource_path(request: Request, call_next):
+    request.scope["path"] = "/" + request.headers.get("x-amz-target", "").split(".")[-1]
+    response = await call_next(request)
+    return response
+
+
 @app.post("/ListTasks", response_model=ListTasksResponse)
-def list_tasks(request: ListTasksRequest) -> ListTasksResponse:
+async def list_tasks(request: Request) -> ListTasksResponse:
+    request_json = await request.json()
+    request = ListTasksRequest(**request_json)
+
     arns = backend.list_tasks(
         cluster=request.cluster,
         family=request.family,
@@ -49,13 +60,19 @@ def list_tasks(request: ListTasksRequest) -> ListTasksResponse:
 
 
 @app.post("/DescribeTasks", response_model=DescribeTasksResponse)
-def describe_tasks(request: DescribeTasksRequest) -> DescribeTasksResponse:
+async def describe_tasks(request: Request) -> DescribeTasksResponse:
+    request_json = await request.json()
+    request = DescribeTasksRequest(**request_json)
+
     output = backend.describe_tasks(tasks=request.tasks, include=request.include)
     return DescribeTasksResponse(**output)
 
 
 @app.post("/RunTask", response_model=RunTaskResponse)
-def run_task(request: RunTaskRequest) -> RunTaskResponse:
+async def run_task(request: Request) -> RunTaskResponse:
+    request_json = await request.json()
+    request = RunTaskRequest(**request_json)
+
     docker_task = backend.run_task(
         request.taskDefinition, request.overrides, request.count
     )
@@ -63,6 +80,28 @@ def run_task(request: RunTaskRequest) -> RunTaskResponse:
     backend.tasks[docker_task.id] = RunTaskBackend(request, docker_task)
     output = backend.describe_tasks(tasks=[docker_task.id])
     return RunTaskResponse(**output)
+
+
+@app.post("/{full_path:path}")
+async def redirect(request: Request, full_path: str):
+    """Redirect request to endpoint specified witin $ECS_ENDPOINT_URL"""
+    request.scope["path"] = "/"
+    data = await request.json()
+
+    response = requests.post(
+        os.environ.get("ECS_ENDPOINT_URL", "https://ecs.amazonaws.com"),
+        headers=dict(request.headers.items()),
+        json=data,
+        timeout=10,
+    )
+
+    # translates requests.models.Response to starlette.responses.Response
+    return Response(
+        status_code=response.status_code,
+        content=data,
+        headers=response.headers,
+        media_type=response.headers["Content-Type"],
+    )
 
 
 @app.exception_handler(EcsAPIException)
@@ -75,4 +114,4 @@ async def ecs_api_exception_handler(_: Request, exc: EcsAPIException) -> JSONRes
 if __name__ == "__main__":
     from uvicorn import run
 
-    run(app=app, port=8080)
+    run(app=app, port=8000, host="0.0.0.0")
