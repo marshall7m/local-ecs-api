@@ -1,0 +1,34 @@
+version: '3.4'
+services:
+  moto:
+    image: motoserver/moto:4.0.1
+    ports:
+    - 5000:5000
+    networks:
+      local-ecs-api-tests:
+  local-ecs-api:
+    build: ../../
+    image: local-ecs-api
+    restart: always
+    volumes:
+    - /usr/bin/docker:/usr/bin/docker
+    - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+    - 8000:8000
+    environment:
+    - COMPOSE_DEST
+    - IAM_ENDPOINT=${MOTO_ENDPOINT_URL}
+    - STS_ENDPOINT=${MOTO_ENDPOINT_URL}
+    - ECS_ENDPOINT_URL=${MOTO_ENDPOINT_URL}
+    - AWS_ACCESS_KEY_ID=mock
+    - AWS_SECRET_ACCESS_KEY=mock
+    - AWS_DEFAULT_REGION=us-east-1
+    networks:
+      local-ecs-api-tests:
+
+networks:
+  local-ecs-api-tests:
+    name: ${NETWORK_NAME}
+    driver: bridge
+    ipam:
+      driver: default
