@@ -286,7 +286,7 @@ class RunTaskBackend:
 
     def pull(self) -> None:
         """Gets refreshed results from running `docker compose ls` within docker project"""
-        self.containers = self.docker_task.docker.ps()
+        self.containers = self.docker_task.docker.compose.ps()
         self.service_names = [c.name for c in self.containers]
 
     def is_failure(self) -> bool:
@@ -406,8 +406,8 @@ class RunTaskBackend:
                 status = getattr(c.state, "health", "UKNOWN")
                 if status == "healthy":
                     continue
-                else:
-                    return status
+
+                return status
 
     @staticmethod
     def _parse_arn(resource_arn: str) -> Dict[str, Any]:
