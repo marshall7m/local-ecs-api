@@ -3,18 +3,17 @@ import os
 import subprocess
 import logging
 import json
-import yaml
 from hashlib import sha1
 import hmac
 from tempfile import NamedTemporaryFile
 import shlex
 from pprint import pformat
-from python_on_whales import DockerClient
+
 import ipaddress
 import random
+import yaml
 import struct
-from datetime import datetime
-import uuid
+from python_on_whales import DockerClient
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
@@ -44,6 +43,13 @@ class DockerTask:
             ":", "-"
         )
         self.docker = DockerClient(compose_project_name=self.task_name)
+        self.docker_ecs_endpoint = DockerClient(
+            compose_files=[
+                os.path.join(
+                    os.path.dirname(__file__), "docker-compose.local-endpoint.yml"
+                )
+            ]
+        )
         self.compose_dir = os.path.join(COMPOSE_DEST, f".{self.task_name}-compose")
         self.hash_path = os.path.join(self.compose_dir, "compose-hash.json")
 
@@ -120,23 +126,11 @@ class DockerTask:
         )
 
     def up(self, count: int):
-        docker = DockerClient(
-            compose_files=[
-                os.path.join(
-                    os.path.dirname(__file__), "docker-compose.local-endpoint.yml"
-                )
-            ]
-        )
-        docker.compose.up(detach=True)
+        self.docker_ecs_endpoint.compose.up(detach=True)
 
-        log.debug("Running ")
         for i in range(count):
             log.debug(f"Count: {i+1}/{count}")
             self.docker.compose.up(build=True, detach=True, log_prefix=False)
-        # TODO create more precise ts by using while proj state != "running"
-
-        self.id = str(uuid.uuid4())
-        self.created_at = datetime.timestamp(datetime.now())
 
     def add_compose_files(self):
         # order of list is important to ensure that the override compose files take precedence
