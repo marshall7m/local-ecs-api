@@ -1,13 +1,16 @@
 import os
 import re
 import json
+import uuid
 from datetime import datetime
 import logging
 from typing import List, Optional, Any, Dict
 import pickle
+from functools import cached_property
 
 from pydantic import BaseModel
 from python_on_whales.utils import run
+from python_on_whales.exceptions import DockerException
 import boto3
 
 from local_ecs_api.converters import DockerTask
@@ -115,7 +118,7 @@ class RunTaskRequest(BaseModel):
     propagateTags: Optional[str]
     referenceId: Optional[str]
     startedBy: Optional[str]
-    tags: Optional[List[Tags]]
+    tags: Optional[List[Tags]] = []
     taskDefinition: str
 
 
@@ -224,8 +227,8 @@ class Tasks(BaseModel):
 
 
 class RunTaskResponse(BaseModel):
-    failures: List[Failures] = List
-    tasks: List[Tasks] = List
+    failures: List[Failures] = []
+    tasks: List[Tasks] = []
 
 
 class DescribeTasksRequest(BaseModel):
@@ -235,8 +238,8 @@ class DescribeTasksRequest(BaseModel):
 
 
 class DescribeTasksResponse(BaseModel):
-    failures: List[Failures] = List
-    tasks: List[Tasks] = List
+    failures: List[Failures] = []
+    tasks: List[Tasks] = []
 
 
 class ListTasksRequest(BaseModel):
@@ -256,83 +259,52 @@ class ListTasksResponse(BaseModel):
     taskArns: List[str] = []
 
 
-class RunTaskBackend:
+class RunTaskBackend(DockerTask):
     """
     Backend class used for converting local Docker container metadata into
     ECS compatible response attributes
     """
 
-    def __init__(self, request: RunTaskRequest, docker_task: DockerTask):
-        self.request = request
-        self.docker_task = docker_task
+    def __init__(self, task_def: str, **kwargs):
+        DockerTask.__init__(self, task_def)
+        self.request = kwargs
         self.metadata = {}
-        self.containers = None
+        if self.request["propagateTags"] == "TASK_DEFINITION":
+            # TODO: raise approriate botocore exception for when propagateTags == "SERVICE"
+            self.request["tags"] += self.task_def["tags"]
 
-        aws_attr = self._parse_arn(self.docker_task.task_def_arn)
+        aws_attr = self._parse_arn(self.task_def_arn)
         self.region = aws_attr["region"]
         self.account_id = aws_attr["account_id"]
-        self.cluster_arn = f"arn:aws:ecs:{self.region}:{self.account_id}:cluster/{self.request.cluster}"
-
-        self.service_names = []
+        self.cluster_arn = f"arn:aws:ecs:{self.region}:{self.account_id}:cluster/{self.request['cluster']}"
 
         self.essential_containers = [
             c["name"]
-            for c in self.docker_task.task_def["containerDefinitions"]
+            for c in self.task_def["containerDefinitions"]
             if c["essential"] is True
         ]
-        self.task_arn = (
-            f"arn:aws:ecs:{self.region}:{self.account_id}:task/{self.docker_task.id}"
-        )
+        self.task_arn = f"arn:aws:ecs:{self.region}:{self.account_id}:task/{self.id}"
 
-    def pull(self) -> None:
-        """Gets refreshed results from running `docker compose ls` within docker project"""
-        self.containers = self.docker_task.docker.compose.ps()
-        self.service_names = [c.name for c in self.containers]
+        self.started_at = datetime.timestamp(datetime.now())
+        self.created_at = None
 
-    def is_failure(self) -> bool:
-        """Returns True if task contains any containers that have failed and True otherwise"""
-        for c_id in self.containers:
-            if self.docker_task.docker.container.inspect(c_id).state.exit_code != 0:
-                return True
+        self.run_exception = None
 
-        return False
+    @cached_property
+    def platform_family(self):
+        # use ecs endpoint to determine platformFamily in case
+        # main docker project were to fail
+        return self.docker_ecs_endpoint.compose.ps()[0].platform
 
-    def get_status(self) -> str:
-        """Returns Docker compose project status translated to lastStatus response attribute"""
-        full_cmd = self.docker_task.docker.docker_compose_cmd + [
-            "ls",
-            "--format",
-            "json",
-            "--all",
-        ]
-        for proj in json.loads(run(full_cmd)):
-            if (
-                proj["Name"]
-                == self.docker_task.docker.compose.client_config.compose_project_name
-            ):
-                # remove status count (e.g. running(1) -> running)
-                status = re.sub(r"\([0-9]+\)$", "", proj["Status"])
-                if status == "running":
-                    return "RUNNING"
-                elif status == "exited":
-                    return "STOPPED"
-        # uncomment and replace above with once PR is merged: https://github.com/gabrieldemarmiesse/python-on-whales/pull/368
-        # for proj in self.docker_task.docker.compose.ls():
-        #     if proj.name == self.docker_task.compose_project_name:
-        #         # remove status count (e.g. running(1) -> running)
-        #         if proj.status == "running":
-        #             return "RUNNING"
-        #         elif proj.status == "exited":
-        #             return "STOPPED"
-
-    def get_attachments(self) -> List[Attachments]:
+    @cached_property
+    def attachments(self) -> List[Attachments]:
         """
         Returns list of docker compose project attributes translated to the ECS
         response attachment attribute
         """
         attachments = []
-        for name in list(self.docker_task.docker.compose.config().networks.keys()):
-            network = self.docker_task.docker.network.inspect(name)
+        for name in list(self.docker.compose.config().networks.keys()):
+            network = self.docker.network.inspect(name)
             ipv4 = ""
             for cfg in network.ipam.config:
                 if cfg.get("Gateway"):
@@ -351,63 +323,68 @@ class RunTaskBackend:
             )
         return attachments
 
-    def get_task(self) -> Dict[str, Any]:
-        """
-        Returns docker compose project attributes to merge into the Task model
-        response
-        """
-        started_at = min([datetime.timestamp(c.created) for c in self.containers])
-        return {
-            "lastStatus": self.get_status(),
-            "createdAt": self.docker_task.created_at,
-            "executionStoppedAt": self.get_execution_stopped_at(),
-            "healthStatus": self.get_task_health_status(),
-            # TODO get more precise times for below attributes
-            "pullStartedAt": self.docker_task.created_at,
-            "pullStoppedAt": self.docker_task.created_at,
-            "startedAt": started_at,
-            "availabilityZone": self.region,
-            "attachments": self.get_attachments(),
-            "clusterArn": self.cluster_arn,
-            "taskArn": self.task_arn,
-            # TODO placeholder
-            "connectivity": "CONNECTED",
-            "connectivityAt": self.docker_task.created_at,
-            "cpu": getattr(getattr(self.request, "overrides"), "cpu", None)
-            or self.docker_task.task_def.get("cpu"),
-            "desiredStatus": "RUNNING",
-            # "group": self.docker_task.task_def["family"],
-            "memory": getattr(getattr(self.request, "overrides"), "memory", None)
-            or self.docker_task.task_def.get("memory"),
-            "platformFamily": self.containers[0].platform,
-            "taskDefinitionArn": self.docker_task.task_def_arn,
-        }
+    @property
+    def service_names(self):
+        return [c.name for c in self.docker.compose.ps()]
 
-    def get_execution_stopped_at(self) -> int:
-        """
-        Returns the timestamp of when all containers within the compose project have finished
-        or returns `0` if any containers are still running
-        """
-        finished_ts = [datetime.timestamp(c.state.finished_at) for c in self.containers]
+    @property
+    def last_status(self) -> str:
+        """Returns Docker compose project status translated to lastStatus response attribute"""
+        full_cmd = self.docker.docker_compose_cmd + [
+            "ls",
+            "--format",
+            "json",
+            "--all",
+        ]
+        for proj in json.loads(run(full_cmd)):
+            if proj["Name"] == self.docker.compose.client_config.compose_project_name:
+                # remove status count (e.g. running(1) -> running)
+                status = re.sub(r"\([0-9]+\)$", "", proj["Status"])
+                if status == "running":
+                    return "RUNNING"
+                elif status == "exited":
+                    return "STOPPED"
+        # uncomment and replace above with once PR is merged: https://github.com/gabrieldemarmiesse/python-on-whales/pull/368
+        # for proj in self.docker.compose.ls():
+        #     if proj.name == self.compose_project_name:
+        #         # remove status count (e.g. running(1) -> running)
+        #         if proj.status == "running":
+        #             return "RUNNING"
+        #         elif proj.status == "exited":
+        #             return "STOPPED"
 
-        # containers that are still running return a negative timestamp
-        if min(finished_ts) < 0:
-            return 0
-        return max(finished_ts)
-
-    def get_task_health_status(self) -> str:
+    @property
+    def task_health_status(self) -> str:
         """
         Returns the health status of first container that reports a status other
         than `healthy` or returns a health status of `healthy` if all containers
         have a health status of healthy
         """
-        for c in self.containers:
+        for c in self.docker.compose.ps():
             if c.name in self.essential_containers:
                 status = getattr(c.state, "health", "UKNOWN")
                 if status == "healthy":
                     continue
 
                 return status
+
+        return "UNKNOWN"
+
+    @property
+    def execution_stopped_at(self) -> int:
+        """
+        Returns the timestamp of when all containers within the compose project have finished
+        or returns `0` if any containers are still running
+        """
+        finished_ts = [
+            datetime.timestamp(c.state.finished_at) for c in self.docker.compose.ps()
+        ]
+
+        # containers that are still running return a negative timestamp
+        if min(finished_ts) < 0:
+            return 0
+
+        return max(finished_ts)
 
     @staticmethod
     def _parse_arn(resource_arn: str) -> Dict[str, Any]:
@@ -418,14 +395,15 @@ class RunTaskBackend:
         )
         return match.groupdict()
 
-    def get_containers(self) -> List[Containers]:
+    @property
+    def containers(self) -> List[Containers]:
         """
         Returns docker compose projects attributes translated into the response Container model
         """
         response = []
 
-        for c_id in self.containers:
-            c = self.docker_task.docker.container.inspect(c_id)
+        for c_id in self.docker.compose.ps():
+            c = self.docker.container.inspect(c_id)
             response.append(
                 Containers(
                     containerArn=f"arn:aws:ecs:{self.region}:{self.account_id}:container/{c.id}",
@@ -451,6 +429,30 @@ class RunTaskBackend:
                 )
             )
         return response
+
+    @cached_property
+    def id(self):
+        return str(uuid.uuid4())
+
+    def is_failure(self) -> bool:
+        """Returns True if task contains any containers that have failed and True otherwise"""
+        for c_id in self.docker.compose.ps():
+            if self.docker.container.inspect(c_id).state.exit_code != 0:
+                return True
+
+        return False
+
+    @property
+    def stop_code(self):
+        if self.run_exception:
+            return "TaskFailedToStart"
+
+    @property
+    def stopped_reason(self):
+        # TODO: create PR to capture stdout/stderr from up()
+        # for now this returns None
+        if self.run_exception:
+            return self.run_exception.stderr
 
 
 class ECSBackend:
@@ -481,7 +483,6 @@ class ECSBackend:
             if match:
                 t = match.groupdict()["id"]
             task = self.tasks[t]
-            task.pull()
             if task.is_failure():
                 response["failures"].append(
                     Failures(
@@ -492,20 +493,43 @@ class ECSBackend:
                     )
                 )
                 continue
-
             response["tasks"].append(
                 Tasks(
-                    containers=task.get_containers(),
-                    **task.get_task(),
+                    lastStatus=task.last_status,
+                    createdAt=task.created_at,
+                    executionStoppedAt=task.execution_stopped_at,
+                    healthStatus=task.task_health_status,
+                    # TODO get more precise times for below attributes
+                    pullStartedAt=task.created_at,
+                    pullStoppedAt=task.created_at,
+                    stoppedAt=task.execution_stopped_at,
+                    stoppingAt=task.stopping_at,
+                    #
+                    startedAt=task.started_at,
+                    stopCode=task.stop_code,
+                    stoppedReason=task.stopped_reason,
+                    availabilityZone=task.region,
+                    attachments=task.attachments,
+                    clusterArn=task.cluster_arn,
+                    taskArn=task.task_arn,
+                    connectivity="CONNECTED",  # TODO replace placeholder
+                    connectivityAt=task.created_at,
+                    cpu=getattr(getattr(task.request, "overrides"), "cpu", None)
+                    or task.task_def.get("cpu"),
+                    desiredStatus="RUNNING",
+                    # group=task.task_def[family],
+                    memory=getattr(getattr(task.request, "overrides"), "memory", None)
+                    or task.task_def.get("memory"),
+                    platformFamily=task.platflorm_family,
+                    taskDefinitionArn=task.task_def_arn,
+                    containers=task.containers,
                     **task.request.dict(),
                 )
             )
 
         return response
 
-    def run_task(
-        self, task_def_arn: str, overrides: Overrides, count: int
-    ) -> DockerTask:
+    def run_task(self, **kwargs) -> Dict[str, Any]:
         """
         Returns ECS RunTask response replaced with local docker compose container values
 
@@ -514,16 +538,26 @@ class ECSBackend:
             overrides: ECS task and container overrides
             count: Number of duplicate compose projects to run
         """
+
         ecs = boto3.client("ecs", endpoint_url=os.environ.get("ECS_ENDPOINT_URL"))
 
-        task_def = ecs.describe_task_definition(taskDefinition=task_def_arn)
-        task = DockerTask(task_def)
+        task_def = ecs.describe_task_definition(taskDefinition=kwargs["taskDefinition"])
+        task = RunTaskBackend(task_def, **kwargs)
+        task.create_docker_compose_stack(kwargs["overrides"])
+        self.created_at = datetime.timestamp(datetime.now())
 
-        task.create_docker_compose_stack(overrides)
-        log.info("Running docker compose up")
-        task.up(count)
+        try:
+            task.up(kwargs["count"])
+        except DockerException as e:
+            log.debug(f"Exit code {e.return_code} while running {e.docker_command}")
+            task.run_exception = e
+            task.stopped_at = datetime.timestamp(datetime.now())
+            task.stopping_at = datetime.timestamp(datetime.now())
+            task.execution_stopped_at = datetime.timestamp(datetime.now())
 
-        return task
+        self.tasks[task.id] = task
+
+        return self.describe_tasks(tasks=[task.id])
 
     def list_tasks(
         self,
@@ -539,9 +573,6 @@ class ECSBackend:
         arns = []
 
         for task in self.tasks.values():
-
-            task.pull()
-
             if cluster is not None and task.request.cluster != cluster:
                 continue
             elif family is not None and task.docker_task.task_def["family"] != family:
@@ -550,7 +581,7 @@ class ECSBackend:
                 continue
             elif service_name is not None and service_name not in task.service_names:
                 continue
-            elif desired_status is not None and task.get_status() != desired_status:
+            elif desired_status is not None and task.last_status != desired_status:
                 continue
             elif started_by is not None and task.request.startedby != started_by:
                 continue
