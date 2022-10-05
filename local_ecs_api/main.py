@@ -14,7 +14,6 @@ from local_ecs_api.models import (
     ListTasksRequest,
     ListTasksResponse,
     ECSBackend,
-    RunTaskBackend,
 )
 import os
 import logging
@@ -73,12 +72,8 @@ async def run_task(request: Request) -> RunTaskResponse:
     request_json = await request.json()
     request = RunTaskRequest(**request_json)
 
-    docker_task = backend.run_task(
-        request.taskDefinition, request.overrides, request.count
-    )
+    output = backend.run_task(**request.dict())
 
-    backend.tasks[docker_task.id] = RunTaskBackend(request, docker_task)
-    output = backend.describe_tasks(tasks=[docker_task.id])
     return RunTaskResponse(**output)
 
 
