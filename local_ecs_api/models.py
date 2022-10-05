@@ -269,7 +269,7 @@ class RunTaskBackend(DockerTask):
         DockerTask.__init__(self, task_def)
         self.request = kwargs
         self.metadata = {}
-        if self.request["propagateTags"] == "TASK_DEFINITION":
+        if self.request.get("propagateTags") == "TASK_DEFINITION":
             # TODO: raise approriate botocore exception for when propagateTags == "SERVICE"
             self.request["tags"] += self.task_def["tags"]
 
@@ -287,6 +287,9 @@ class RunTaskBackend(DockerTask):
 
         self.started_at = datetime.timestamp(datetime.now())
         self.created_at = None
+        self.stopping_at = None
+        self.stopped_at = None
+        self.stopping_at = None
 
         self.run_exception = None
 
@@ -382,7 +385,7 @@ class RunTaskBackend(DockerTask):
 
         # containers that are still running return a negative timestamp
         if min(finished_ts) < 0:
-            return 0
+            return
 
         return max(finished_ts)
 
@@ -434,6 +437,16 @@ class RunTaskBackend(DockerTask):
     def id(self):
         return str(uuid.uuid4())
 
+    @cached_property
+    def cpu(self):
+        return self.request.get("overrides", {}).get("cpu", self.task_def.get("cpu"))
+
+    @cached_property
+    def memory(self):
+        return self.request.get("overrides", {}).get(
+            "memory", self.task_def.get("memory")
+        )
+
     def is_failure(self) -> bool:
         """Returns True if task contains any containers that have failed and True otherwise"""
         for c_id in self.docker.compose.ps():
@@ -446,6 +459,8 @@ class RunTaskBackend(DockerTask):
     def stop_code(self):
         if self.run_exception:
             return "TaskFailedToStart"
+
+        return
 
     @property
     def stopped_reason(self):
@@ -514,17 +529,15 @@ class ECSBackend:
                     taskArn=task.task_arn,
                     connectivity="CONNECTED",  # TODO replace placeholder
                     connectivityAt=task.created_at,
-                    cpu=getattr(getattr(task.request, "overrides"), "cpu", None)
-                    or task.task_def.get("cpu"),
+                    cpu=task.cpu,
                     desiredStatus="RUNNING",
-                    # group=task.task_def[family],
-                    memory=getattr(getattr(task.request, "overrides"), "memory", None)
-                    or task.task_def.get("memory"),
-                    platformFamily=task.platflorm_family,
+                    group=task.task_def["family"],
+                    memory=task.memory,
+                    platformFamily=task.platform_family,
                     taskDefinitionArn=task.task_def_arn,
                     containers=task.containers,
-                    **task.request.dict(),
-                )
+                    **task.request,
+                ).dict(exclude_unset=True, exclude_none=True)
             )
 
         return response
@@ -543,7 +556,7 @@ class ECSBackend:
 
         task_def = ecs.describe_task_definition(taskDefinition=kwargs["taskDefinition"])
         task = RunTaskBackend(task_def, **kwargs)
-        task.create_docker_compose_stack(kwargs["overrides"])
+        task.create_docker_compose_stack(kwargs.get("overrides"))
         self.created_at = datetime.timestamp(datetime.now())
 
         try:
