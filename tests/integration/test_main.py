@@ -115,11 +115,11 @@ def test_run_task_with_success():
     log.debug(pformat(data))
 
     assert len(data["failures"]) == 0
-    assert len(data["tasks"]["containers"]) == len(
+    assert len(data["tasks"][0]["containers"]) == len(
         task_defs["fast_success"]["containerDefinitions"]
     )
 
-    for c in data["tasks"]["containers"]:
+    for c in data["tasks"][0]["containers"]:
         assert c["lastStatus"] == "exited"
 
 
