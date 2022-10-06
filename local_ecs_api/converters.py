@@ -1,5 +1,6 @@
 from glob import glob
 import os
+import uuid
 import subprocess
 import logging
 import json
@@ -42,7 +43,17 @@ class DockerTask:
             .replace("-", "_")
             .replace(":", "-v")
         )
-        self.docker = DockerClient(compose_project_name=self.task_name)
+        self.id = str(uuid.uuid4())
+        self.compose_dir = os.path.join(
+            COMPOSE_DEST, f".{self.task_name}-{self.id[:4]}"
+        )
+
+        self.docker = DockerClient(
+            compose_project_name=self.task_name,
+            compose_project_directory=self.compose_dir,
+        )
+
+        self.docker.client_config.compose_files = []
         self.docker_ecs_endpoint = DockerClient(
             compose_files=[
                 os.path.join(
