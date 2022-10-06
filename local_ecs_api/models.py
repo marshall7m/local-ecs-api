@@ -1,7 +1,6 @@
 import os
 import re
 import json
-import uuid
 from datetime import datetime
 import logging
 from typing import List, Optional, Any, Dict
@@ -212,7 +211,7 @@ class Tasks(BaseModel):
     pullStoppedAt: Optional[int]
     startedAt: Optional[int]
     startedBy: Optional[str]
-    stopCode: Optional[str]
+    stopCode: Optional[int]
     stoppedAt: Optional[int]
     stoppedReason: Optional[str]
     stoppingAt: Optional[int]
@@ -290,6 +289,8 @@ class RunTaskBackend(DockerTask):
         self.stopping_at = None
         self.stopped_at = None
         self.stopping_at = None
+        self._execution_stopped_at = None
+        self._last_status = None
 
         self.run_exception = None
 
@@ -297,7 +298,7 @@ class RunTaskBackend(DockerTask):
     def platform_family(self):
         # use ecs endpoint to determine platformFamily in case
         # main docker project were to fail
-        return self.docker_ecs_endpoint.compose.ps()[0].platform
+        return self.docker_ecs_endpoint.compose.ps()[0].platform.upper()
 
     @cached_property
     def attachments(self) -> List[Attachments]:
@@ -333,6 +334,10 @@ class RunTaskBackend(DockerTask):
     @property
     def last_status(self) -> str:
         """Returns Docker compose project status translated to lastStatus response attribute"""
+
+        if self._last_status:
+            return self._last_status
+
         full_cmd = self.docker.docker_compose_cmd + [
             "ls",
             "--format",
@@ -355,6 +360,10 @@ class RunTaskBackend(DockerTask):
         #             return "RUNNING"
         #         elif proj.status == "exited":
         #             return "STOPPED"
+
+    @last_status.setter
+    def last_status(self, value):
+        self._last_status = value
 
     @property
     def task_health_status(self) -> str:
@@ -379,6 +388,9 @@ class RunTaskBackend(DockerTask):
         Returns the timestamp of when all containers within the compose project have finished
         or returns `0` if any containers are still running
         """
+        if self._execution_stopped_at:
+            return self._execution_stopped_at
+
         finished_ts = [
             datetime.timestamp(c.state.finished_at) for c in self.docker.compose.ps()
         ]
@@ -388,6 +400,10 @@ class RunTaskBackend(DockerTask):
             return
 
         return max(finished_ts)
+
+    @execution_stopped_at.setter
+    def execution_stopped_at(self, value):
+        self._execution_stopped_at = value
 
     @staticmethod
     def _parse_arn(resource_arn: str) -> Dict[str, Any]:
@@ -434,10 +450,6 @@ class RunTaskBackend(DockerTask):
         return response
 
     @cached_property
-    def id(self):
-        return str(uuid.uuid4())
-
-    @cached_property
     def cpu(self):
         return self.request.get("overrides", {}).get("cpu", self.task_def.get("cpu"))
 
@@ -456,16 +468,15 @@ class RunTaskBackend(DockerTask):
         return False
 
     @property
-    def stop_code(self):
+    def stop_code(self) -> int:
+        """Returns the exit code from running the `docker compose up` command"""
+        # TODO: possibly translate local docker exit cases to ECS stop codes
         if self.run_exception:
-            return "TaskFailedToStart"
-
-        return
+            return self.run_exception.return_code
 
     @property
-    def stopped_reason(self):
-        # TODO: create PR to capture stdout/stderr from up()
-        # for now this returns None
+    def stopped_reason(self) -> str:
+        """Returns the stderr from running the `docker compose up` command"""
         if self.run_exception:
             return self.run_exception.stderr
 
@@ -567,6 +578,7 @@ class ECSBackend:
             task.stopped_at = datetime.timestamp(datetime.now())
             task.stopping_at = datetime.timestamp(datetime.now())
             task.execution_stopped_at = datetime.timestamp(datetime.now())
+            task.last_status = "STOPPED"
 
         self.tasks[task.id] = task
 
