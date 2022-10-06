@@ -1,0 +1,66 @@
+name: Tests
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+    branches:
+    - master
+    tags:
+    - ci
+    - tests
+    paths-ignore:
+    - .gitignore
+    - LICENSE.md
+    - README.md
+
+  push:
+    branches:
+    - master
+    paths-ignore:
+    - .gitignore
+    - LICENSE.md
+    - README.md
+
+env:
+  PYTHON_VERSION: 3.9
+jobs:
+  precommit:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python
+      id: python-setup
+      uses: actions/setup-python@v3
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    - name: Hooks
+      shell: bash
+      run: |
+        python3 -m pip install --upgrade pip
+        python3 -m pip install pre-commit
+
+        pre-commit install
+        pre-commit run --all-files
+
+  tests:
+    runs-on: ubuntu-latest
+    env:
+      PYTEST_ADDOPTS: --color=yes
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python
+      id: python-setup
+      uses: actions/setup-python@v3
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    - name: Install deps
+      id: install
+      shell: bash
+      run: |
+        bash ./install.sh
+        python3 -m pip install --upgrade pip
+        python3 -m pip install --upgrade -e ".[tests]"
+    - name: Tests
+      id: pytest
+      shell: bash
+      run: pytest -vv tests
