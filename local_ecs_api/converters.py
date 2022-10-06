@@ -3,8 +3,6 @@ import os
 import subprocess
 import logging
 import json
-from hashlib import sha1
-import hmac
 from tempfile import NamedTemporaryFile
 import shlex
 from pprint import pformat
@@ -50,8 +48,6 @@ class DockerTask:
                 )
             ]
         )
-        self.compose_dir = os.path.join(COMPOSE_DEST, f".{self.task_name}-compose")
-        self.hash_path = os.path.join(self.compose_dir, "compose-hash.json")
 
     def generate_local_task_compose_file(self, task_def, path):
 
@@ -66,75 +62,28 @@ class DockerTask:
         return path
 
     def create_docker_compose_stack(self, overrides=None):
-        compose_hash_input = [self.task_def]
-        overrides_def = None
+        log.info("Generating docker compose files")
+        os.makedirs(self.compose_dir, exist_ok=True)
+
+        self.generate_local_task_compose_file(
+            self.task_def,
+            os.path.join(self.compose_dir, "docker-compose.ecs-local.task.yml"),
+        )
+
         if overrides:
             log.info("Creating overrides task definition")
             overrides["containerDefinitions"] = overrides.pop("containerOverrides")
-            overrides_def = overrides
-            compose_hash_input.append(overrides_def)
 
-        compose_hash = sha1()
-        for v in compose_hash_input:
-            compose_hash.update(
-                json.dumps(v, sort_keys=True, default=str).encode("cp037")
-            )
-        compose_hash = compose_hash.hexdigest()
-
-        generate = False
-        if os.path.exists(self.hash_path):
-            with open(self.hash_path, "r") as f:
-                cache_hash = json.load(f)["hash"]
-
-            if hmac.compare_digest(str(compose_hash), str(cache_hash)):
-                log.info("Using cache docker compose directory")
-            else:
-                generate = True
-        else:
-            log.debug("Cache compose hash file doesn't exist")
-            generate = True
-
-        if generate:
-            log.info("Generating docker compose files")
-            self.generate_compose_files(self.task_def, overrides_def)
-
-            log.info("Creating/modifying compose hash file")
-            with open(self.hash_path, "w") as f:
-                log.debug(f"New hash: {compose_hash}")
-                json.dump({"hash": compose_hash}, f)
-
-        self.add_compose_files()
-
-    def generate_compose_files(self, task_def, overrides_def):
-        os.makedirs(self.compose_dir, exist_ok=True)
-        self.generate_local_task_compose_file(
-            task_def,
-            os.path.join(self.compose_dir, "docker-compose.ecs-local.tasks.yml"),
-        )
-
-        if overrides_def:
             self.generate_local_task_compose_file(
-                overrides_def,
+                overrides,
                 os.path.join(
                     self.compose_dir, "docker-compose.ecs-local.run-task-override.yml"
                 ),
             )
 
-        self.docker.client_config.compose_files.extend(
-            glob(self.compose_dir + "/*[!override].yml")
-            + glob(self.compose_dir + "/*override.yml")
-        )
-
-    def up(self, count: int):
-        self.docker_ecs_endpoint.compose.up(detach=True)
-
-        for i in range(count):
-            log.debug(f"Count: {i+1}/{count}")
-            self.docker.compose.up(build=True, detach=True, log_prefix=False)
-
-    def add_compose_files(self):
         # order of list is important to ensure that the override compose files take precedence
-        # over original compose files
+        # over original compose files and user-defined compose files take precendence over
+        # override files
 
         all_compose_files = (
             glob(self.compose_dir + "/*[!override].yml")
@@ -147,6 +96,15 @@ class DockerTask:
                 compose_files.add(path)
 
         self.docker.client_config.compose_files.extend(list(compose_files))
+
+    def up(self, count: int):
+        self.docker_ecs_endpoint.compose.up(quiet=True, detach=True)
+
+        for i in range(count):
+            log.debug(f"Count: {i+1}/{count}")
+            self.docker.compose.up(
+                quiet=True, build=True, detach=True, log_prefix=False
+            )
 
     def get_network_assigned_ips(self, network_name):
         return [
