@@ -596,19 +596,18 @@ class ECSBackend:
         max_results: Optional[int] = None,
     ) -> List[str]:
         arns = []
-
         for task in self.tasks.values():
-            if cluster is not None and task.request.cluster != cluster:
+            if cluster is not None and task.request["cluster"] != cluster:
                 continue
-            elif family is not None and task.docker_task.task_def["family"] != family:
+            elif family is not None and task.task_def["family"] != family:
                 continue
-            elif launch_type is not None and task.request.launchType != launch_type:
+            elif launch_type is not None and task.request["launchType"] != launch_type:
                 continue
             elif service_name is not None and service_name not in task.service_names:
                 continue
             elif desired_status is not None and task.last_status != desired_status:
                 continue
-            elif started_by is not None and task.request.startedby != started_by:
+            elif started_by is not None and task.request.get("startedBy") != started_by:
                 continue
             elif (
                 container_instance is not None
