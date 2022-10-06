@@ -1,7 +1,6 @@
 import os
 import logging
 import re
-import requests
 from pprint import pformat
 
 import pytest
@@ -50,18 +49,6 @@ def test_redirect_supported():
     response = ecs.list_clusters()
 
     assert "clusterArns" in response
-
-
-def test_redirect_not_supported():
-    """Ensures local API requests and any redirected requests that aren't supported return the expected failed status code"""
-    response = requests.post(
-        os.environ.get("LOCAL_ECS_API_ENDPOINT"),
-        headers={"x-amz-target": "foo.endpoint"},
-        json={"foo": "doo"},
-        timeout=5,
-    )
-
-    assert response.status_code == 500
 
 
 def test_run_task(aws_credentials):
