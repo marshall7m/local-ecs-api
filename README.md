@@ -184,7 +184,7 @@ The following ECS responses will contain attribute that reference the local dock
          "pullStoppedAt": number,
          "startedAt": number,
          "startedBy": <gets from RunTask request>,
-         "stopCode": <docker compose up return code translated into ECS StopCode>,
+         "stopCode": <docker compose up return code>,
          "stoppedAt": number,
          "stoppedReason": <TODO>,
          "stoppingAt": number,
@@ -230,3 +230,9 @@ The following ECS responses will contain attribute that reference the local dock
 - add group attribute to describeTasks response
 
 
+- add e2e tests for testing redirects to ECS endpoint
+- add heredocs to converters.py
+- add heredocs to main.py
+- add heredocs to models.py
+
+- add save() to RunTask function for saving to .pickle file
