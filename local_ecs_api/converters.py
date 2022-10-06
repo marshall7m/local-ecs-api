@@ -37,8 +37,10 @@ class DockerTask:
     def __init__(self, task_def):
         self.task_def = task_def["taskDefinition"]
         self.task_def_arn = self.task_def["taskDefinitionArn"]
-        self.task_name = self.task_def_arn.split("task-definition/")[-1].replace(
-            ":", "-"
+        self.task_name = (
+            self.task_def_arn.split("task-definition/")[-1]
+            .replace("-", "_")
+            .replace(":", "-v")
         )
         self.docker = DockerClient(compose_project_name=self.task_name)
         self.docker_ecs_endpoint = DockerClient(
