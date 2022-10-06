@@ -4,7 +4,7 @@ task_defs = {
     "fast_fail": {
         "containerDefinitions": [
             {
-                "name": "exit",
+                "name": "fast_fail",
                 "command": [
                     "/bin/sh",
                     "fail",
@@ -21,7 +21,7 @@ task_defs = {
     "essential_success": {
         "containerDefinitions": [
             {
-                "name": "sleep",
+                "name": "essential_success",
                 "command": [
                     "sleep",
                     "5",
@@ -38,7 +38,7 @@ task_defs = {
     "fast_success": {
         "containerDefinitions": [
             {
-                "name": "shell",
+                "name": "fast_success",
                 "command": ["/bin/sh"],
                 "cpu": 1,
                 "essential": True,
@@ -52,7 +52,7 @@ task_defs = {
     "invalid_img": {
         "containerDefinitions": [
             {
-                "name": "shell",
+                "name": "invalid_img",
                 "command": ["/bin/sh"],
                 "cpu": 1,
                 "essential": True,
