@@ -88,8 +88,8 @@ def test_describe_tasks_gets_updated_results(aws_credentials):
     response_json = response.json()
 
     assert len(response_json["failures"]) == 0
-    assert len(response_json["tasks"]["containers"]) == len(
-        task["containerDefinitions"]
+    assert len(response_json["tasks"][0]["containers"]) == len(
+        task["taskDefinition"]["containerDefinitions"]
     )
 
 
@@ -170,5 +170,5 @@ def test_run_task_pull_img_failure():
 
     assert len(data["failures"]) == 0
 
-    assert data["tasks"][0]["stopCode"] == "TaskFailedToStart"
+    assert data["tasks"][0]["stopCode"] == 18
     assert data["tasks"][0]["lastStatus"] == "STOPPED"
