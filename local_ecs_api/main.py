@@ -92,7 +92,7 @@ async def redirect(request: Request, full_path: str):
     # translates requests.models.Response to starlette.responses.Response
     return Response(
         status_code=response.status_code,
-        content=data,
+        content=response.content,
         headers=response.headers,
         media_type=response.headers["Content-Type"],
     )
