@@ -72,8 +72,7 @@ async def run_task(request: Request) -> RunTaskResponse:
     request_json = await request.json()
     request = RunTaskRequest(**request_json)
 
-    output = backend.run_task(**request.dict())
-
+    output = backend.run_task(**request.dict(exclude_none=True))
     return RunTaskResponse(**output)
 
 
