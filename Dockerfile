@@ -7,6 +7,6 @@ COPY ./install.sh /app/install.sh
 COPY ./pyproject.toml /app/pyproject.toml
 COPY ./local_ecs_api /app/local_ecs_api
 
-RUN bash ./install.sh && pip install .
+RUN bash ./install.sh && pip install -e .
 
 CMD ["python", "/app/local_ecs_api/main.py"] 
