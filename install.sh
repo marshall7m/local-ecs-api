@@ -137,17 +137,17 @@ qX2yy/UX5nSPU492e2CdZ1UhoU0SRFY3bxKHKB7SDbVeav+K5g==
 =Gi5D
 -----END PGP PUBLIC KEY BLOCK-----
 EOF
-gpg --import /tmp/pub_ecs_cli.txt
+gpg --import /tmp/src-tmp/pub_ecs_cli.txt
 curl -Lo ecs-cli.asc https://amazon-ecs-cli.s3.amazonaws.com/ecs-cli-linux-amd64-latest.asc
 gpg --verify ecs-cli.asc /usr/local/bin/ecs-cli
-chmod +x /usr/local/bin/ecs-cli
+sudo chmod +x /usr/local/bin/ecs-cli
 
 # docker compose plugin
 DOCKER_CONFIG="${DOCKER_CONFIG:-$HOME/.docker}"
 mkdir -p "${DOCKER_CONFIG}"/cli-plugins
 curl -SL https://github.com/docker/compose/releases/download/v2.3.3/docker-compose-linux-aarch64 -o "${DOCKER_CONFIG}"/cli-plugins/docker-compose
-chmod +x "${DOCKER_CONFIG}"/cli-plugins/docker-compose
+sudo chmod +x "${DOCKER_CONFIG}"/cli-plugins/docker-compose
 
-apt-get clean
-rm -rf /var/lib/apt/lists/*
-rm -rf /tmp/src/tmp*
+sudo apt-get clean
+sudo rm -rf /var/lib/apt/lists/*
+sudo rm -rf /tmp/src/tmp*
