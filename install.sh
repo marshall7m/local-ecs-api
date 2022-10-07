@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -x
+set -e
 
 run_as="${1}"
 
@@ -8,8 +8,9 @@ $run_as apt-get -y update
 $run_as apt-get -y install gnupg curl
 
 # ecs-cli
-curl -s -Lo /usr/local/bin/ecs-cli https://amazon-ecs-cli.s3.amazonaws.com/ecs-cli-linux-amd64-latest
+$run_as curl -s -Lo /usr/local/bin/ecs-cli https://amazon-ecs-cli.s3.amazonaws.com/ecs-cli-linux-amd64-latest
 mkdir /tmp/src-tmp
+
 $run_as chmod +rwx /var/lib/apt/lists/*
 
 cat <<EOF > /tmp/src-tmp/pub_ecs_cli.txt
@@ -145,7 +146,7 @@ qX2yy/UX5nSPU492e2CdZ1UhoU0SRFY3bxKHKB7SDbVeav+K5g==
 -----END PGP PUBLIC KEY BLOCK-----
 EOF
 gpg --import /tmp/src-tmp/pub_ecs_cli.txt
-curl -s -Lo ecs-cli.asc https://amazon-ecs-cli.s3.amazonaws.com/ecs-cli-linux-amd64-latest.asc
+curl -Lo ecs-cli.asc https://amazon-ecs-cli.s3.amazonaws.com/ecs-cli-linux-amd64-latest.asc
 gpg --verify ecs-cli.asc /usr/local/bin/ecs-cli
 $run_as chmod +x /usr/local/bin/ecs-cli
 
