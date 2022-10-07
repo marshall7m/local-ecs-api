@@ -1,9 +1,11 @@
+#!/bin/bash
+
 set -x
 
 run_as="${1}"
 
 $run_as apt-get -y update
-$run_as apt-get -y install gnupg
+$run_as apt-get -y install gnupg curl
 
 # ecs-cli
 curl -s -Lo /usr/local/bin/ecs-cli https://amazon-ecs-cli.s3.amazonaws.com/ecs-cli-linux-amd64-latest
