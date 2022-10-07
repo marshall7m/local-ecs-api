@@ -25,16 +25,19 @@ def local_ecs_api():
 
     docker.compose.up(build=True, detach=True)
 
-    log.debug("Connecting testing container to API network")
-    with open("/etc/hostname", "r", encoding="utf-8") as f:
-        container_id = f.read().strip()
-        try:
-            docker.network.connect(os.environ["NETWORK_NAME"], container_id)
-        except DockerException as e:
-            if re.search(r"already exists in network", e.stderr):
-                log.debug("Container is already associated")
-            else:
-                raise e
+    # CI env var will be set if running in GitHub Action job
+    if not os.environ.get("CI"):
+        # needed only if running tests within container
+        log.debug("Connecting dev container to API network")
+        with open("/etc/hostname", "r", encoding="utf-8") as f:
+            container_id = f.read().strip()
+            try:
+                docker.network.connect(os.environ["NETWORK_NAME"], container_id)
+            except DockerException as e:
+                if re.search(r"already exists in network", e.stderr):
+                    log.debug("Container is already associated")
+                else:
+                    raise e
 
     yield docker
 
