@@ -57,7 +57,7 @@ jobs:
       id: install
       shell: bash
       run: |
-        bash ./install.sh
+        bash ./install.sh "sudo"
 
         python3 -m pip install --upgrade pip
         python3 -m pip install --upgrade -e ".[tests]"

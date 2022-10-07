@@ -1,11 +1,14 @@
 set -x
-sudo apt-get -y update
-sudo apt-get -y install gnupg
+
+run_as="${1}"
+
+$run_as apt-get -y update
+$run_as apt-get -y install gnupg
 
 # ecs-cli
 curl -s -Lo /usr/local/bin/ecs-cli https://amazon-ecs-cli.s3.amazonaws.com/ecs-cli-linux-amd64-latest
 mkdir /tmp/src-tmp
-sudo chmod +rwx /var/lib/apt/lists/*
+$run_as chmod +rwx /var/lib/apt/lists/*
 
 cat <<EOF > /tmp/src-tmp/pub_ecs_cli.txt
 -----BEGIN PGP PUBLIC KEY BLOCK-----
@@ -142,14 +145,14 @@ EOF
 gpg --import /tmp/src-tmp/pub_ecs_cli.txt
 curl -s -Lo ecs-cli.asc https://amazon-ecs-cli.s3.amazonaws.com/ecs-cli-linux-amd64-latest.asc
 gpg --verify ecs-cli.asc /usr/local/bin/ecs-cli
-sudo chmod +x /usr/local/bin/ecs-cli
+$run_as chmod +x /usr/local/bin/ecs-cli
 
 # docker compose plugin
 DOCKER_CONFIG="${DOCKER_CONFIG:-$HOME/.docker}"
 mkdir -p "${DOCKER_CONFIG}"/cli-plugins
 curl -s -SL https://github.com/docker/compose/releases/download/v2.3.3/docker-compose-linux-aarch64 -o "${DOCKER_CONFIG}"/cli-plugins/docker-compose
-sudo chmod +x "${DOCKER_CONFIG}"/cli-plugins/docker-compose
+$run_as chmod +x "${DOCKER_CONFIG}"/cli-plugins/docker-compose
 
-sudo apt-get clean
-sudo rm -rf /var/lib/apt/lists/*
-sudo rm -rf /tmp/src-tmp
+$run_as apt-get clean
+$run_as rm -rf /var/lib/apt/lists/*
+$run_as rm -rf /tmp/src-tmp
