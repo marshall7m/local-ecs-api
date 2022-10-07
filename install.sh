@@ -1,8 +1,6 @@
 set -x
-apt-get -y install sudo
-
-sudo apt-get -y update
-sudo apt-get -y install gnupg
+apt-get -y update
+apt-get -y install sudo gnupg
 
 # ecs-cli
 curl -s -Lo /usr/local/bin/ecs-cli https://amazon-ecs-cli.s3.amazonaws.com/ecs-cli-linux-amd64-latest
