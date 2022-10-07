@@ -47,9 +47,11 @@ def connect_tests_to_api(local_api):
                 else:
                     raise e
 
-        yield docker
+        yield
 
         docker.network.disconnect(os.environ["NETWORK_NAME"], container_id)
+    else:
+        yield
 
 
 def test_redirect_supported(aws_credentials):
