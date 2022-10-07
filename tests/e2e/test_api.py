@@ -47,7 +47,7 @@ def connect_tests_to_api(local_api):
                 else:
                     raise e
 
-        yield
+        yield None
 
         docker.network.disconnect(os.environ["NETWORK_NAME"], container_id)
 
