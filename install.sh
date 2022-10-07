@@ -1,5 +1,5 @@
 sudo apt-get -y update
-sudo apt-get -y install gnupg
+sudo apt-get -y install gnupg docker-compose-plugin
 
 # ecs-cli
 curl -Lo /usr/local/bin/ecs-cli https://amazon-ecs-cli.s3.amazonaws.com/ecs-cli-linux-amd64-latest
@@ -141,12 +141,6 @@ gpg --import /tmp/src-tmp/pub_ecs_cli.txt
 curl -Lo ecs-cli.asc https://amazon-ecs-cli.s3.amazonaws.com/ecs-cli-linux-amd64-latest.asc
 gpg --verify ecs-cli.asc /usr/local/bin/ecs-cli
 sudo chmod +x /usr/local/bin/ecs-cli
-
-# docker compose plugin
-DOCKER_CONFIG="${DOCKER_CONFIG:-$HOME/.docker}"
-mkdir -p "${DOCKER_CONFIG}"/cli-plugins
-curl -SL https://github.com/docker/compose/releases/download/v2.3.3/docker-compose-linux-aarch64 -o "${DOCKER_CONFIG}"/cli-plugins/docker-compose
-sudo chmod +x "${DOCKER_CONFIG}"/cli-plugins/docker-compose
 
 sudo apt-get clean
 sudo rm -rf /var/lib/apt/lists/*
