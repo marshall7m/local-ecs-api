@@ -58,6 +58,7 @@ jobs:
       shell: bash
       run: |
         bash ./install.sh
+
         python3 -m pip install --upgrade pip
         python3 -m pip install --upgrade -e ".[tests]"
     - name: Tests
