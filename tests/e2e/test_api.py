@@ -18,10 +18,11 @@ FILE_DIR = os.path.dirname(__file__)
 
 @pytest.fixture(scope="module", autouse=True)
 def local_api():
+    os.environ["NETWORK_NAME"] = "local-ecs-api-tests"
     os.environ["LOCAL_ECS_API_ENDPOINT"] = "http://" + "local-ecs-api" + ":8000"
     docker = DockerClient(compose_files=[os.path.join(FILE_DIR, "docker-compose.yml")])
 
-    docker.compose.up(build=True, detach=True)
+    docker.compose.up(build=True, detach=True, quiet=True)
 
     yield docker
 
@@ -31,7 +32,6 @@ def local_api():
 
 @pytest.fixture(scope="module", autouse=True)
 def connect_tests_to_api(local_api):
-    os.environ["NETWORK_NAME"] = "local-ecs-api-tests"
     # CI env var will be set if running in GitHub Action job
     if not os.environ.get("CI"):
         # needed only if running tests within container
@@ -47,7 +47,7 @@ def connect_tests_to_api(local_api):
                 else:
                     raise e
 
-        yield None
+        yield docker
 
         docker.network.disconnect(os.environ["NETWORK_NAME"], container_id)
 
