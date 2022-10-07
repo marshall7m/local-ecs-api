@@ -3,12 +3,6 @@ name: Publish Docker image
 on:
   release:
     types: [published]
-  push:
-    branches:
-    - master
-    tags:
-    - ci
-    - tests
 
 jobs:
   docker:
@@ -23,17 +17,9 @@ jobs:
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
-    - name: Build and push Docker master image
+    - name: Build and push Docker image
       uses: docker/build-push-action@v3
-      if: ${{ github.event_name == 'push' }}
-      with:
-        push: true
-        tags: |-
-          ${{ github.repository }}:latest
-          ${{ github.repository }}:${{ github.sha }}
-    - name: Build and push Docker release image
-      uses: docker/build-push-action@v3
-      if: ${{ github.event_name == 'release' }}
+      if: ${{ github.event_name == 'release' && github.event.action == 'published'}}
       with:
         push: true
         tags: ${{ github.repository }}:${{ github.event.release.tag_name }}
