@@ -149,6 +149,45 @@ def test_run_task_with_failure():
 
 @pytest.mark.usefixtures("aws_credentials")
 @mock_ecs
+def test_run_task_with_successful_overrides():
+    """
+    Ensures RunTask endpoint returns the expected response for task definitions
+    that are expected to fail
+    """
+    ecs = boto3.client("ecs")
+    task = ecs.register_task_definition(**task_defs["fast_success"])
+
+    response = client.post(
+        "/",
+        headers={"x-amz-target": "RunTask"},
+        json={
+            "taskDefinition": task["taskDefinition"]["taskDefinitionArn"],
+            "overrides": {
+                "containerOverrides": [
+                    {
+                        "name": task_defs["fast_success"]["containerDefinitions"][0][
+                            "name"
+                        ],
+                        "environment": [{"name": "foo", "value": "bar"}],
+                    }
+                ]
+            },
+        },
+    )
+    response_data = response.json()
+    assert response.status_code == 200
+
+    assert len(response_data["failures"]) == 0
+    assert len(response_data["tasks"][0]["containers"]) == len(
+        task_defs["fast_success"]["containerDefinitions"]
+    )
+
+    for c in response_data["tasks"][0]["containers"]:
+        assert c["lastStatus"] == "exited"
+
+
+@pytest.mark.usefixtures("aws_credentials")
+@mock_ecs
 def test_run_task_pull_img_failure():
     """
     Ensures RunTask endpoint returns the expected response for task definitions
@@ -164,11 +203,11 @@ def test_run_task_pull_img_failure():
     )
     assert response.status_code == 200
 
-    data = response.json()
+    response_data = response.json()
     log.debug("Response:")
-    log.debug(pformat(data))
+    log.debug(pformat(response_data))
 
-    assert len(data["failures"]) == 0
+    assert len(response_data["failures"]) == 0
 
-    assert data["tasks"][0]["stopCode"] == 18
-    assert data["tasks"][0]["lastStatus"] == "STOPPED"
+    assert response_data["tasks"][0]["stopCode"] == 18
+    assert response_data["tasks"][0]["lastStatus"] == "STOPPED"
