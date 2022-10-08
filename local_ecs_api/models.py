@@ -51,14 +51,14 @@ class EnvironmentFiles(BaseModel):
 
 
 class ContainerOverrides(BaseModel):
-    command: List[str]
-    cpu: int
-    environment: List[Environment]
-    environmentFiles: List[EnvironmentFiles]
-    memory: int
-    memoryReservation: int
+    command: Optional[List[str]]
+    cpu: Optional[int]
+    environment: Optional[List[Environment]]
+    environmentFiles: Optional[List[EnvironmentFiles]]
+    memory: Optional[int]
+    memoryReservation: Optional[int]
     name: str
-    resourceRequirements: List[ResourceRequirements]
+    resourceRequirements: Optional[List[ResourceRequirements]]
 
 
 class EphemeralStorage(BaseModel):
@@ -92,12 +92,12 @@ class InferenceAccelerators(BaseModel):
 
 class Overrides(BaseModel):
     containerOverrides: Optional[List[ContainerOverrides]]
-    cpu: str
-    ephemeralStorage: EphemeralStorage
-    executionRoleArn: str
-    inferenceAcceleratorOverrides: List[InferenceAccelerators]
-    memory: str
-    taskRoleArn: str
+    cpu: Optional[str]
+    ephemeralStorage: Optional[EphemeralStorage]
+    executionRoleArn: Optional[str]
+    inferenceAcceleratorOverrides: Optional[List[InferenceAccelerators]]
+    memory: Optional[str]
+    taskRoleArn: Optional[str]
 
 
 class RunTaskRequest(BaseModel):
@@ -221,7 +221,7 @@ class Tasks(BaseModel):
     containers: Optional[List[Containers]]
     ephemeralStorage: Optional[EphemeralStorage]
     inferenceAccelerators: Optional[List[InferenceAccelerators]]
-    overrides: Optional[List[Overrides]]
+    overrides: Optional[Overrides]
     tags: Optional[List[Tags]]
 
 
