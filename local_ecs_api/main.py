@@ -1,11 +1,13 @@
 import pickle
-import requests
+import sys
+import os
+import logging
 
+import requests
 from fastapi import FastAPI
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
+from starlette.responses import Response
 
-from local_ecs_api.exceptions import EcsAPIException
 from local_ecs_api.models import (
     RunTaskRequest,
     RunTaskResponse,
@@ -15,11 +17,13 @@ from local_ecs_api.models import (
     ListTasksResponse,
     ECSBackend,
 )
-import os
-import logging
 
-log = logging.getLogger(__file__)
+log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
+stream = logging.StreamHandler(sys.stdout)
+formatter = logging.Formatter("%(levelname)s:     %(message)s")
+stream.setFormatter(formatter)
+log.addHandler(stream)
 
 BACKEND_PATH = os.path.join(os.path.dirname(__file__), ".backend.pickle")
 
@@ -95,13 +99,6 @@ async def redirect(request: Request, full_path: str):
         content=response.content,
         headers=response.headers,
         media_type=response.headers["Content-Type"],
-    )
-
-
-@app.exception_handler(EcsAPIException)
-async def ecs_api_exception_handler(_: Request, exc: EcsAPIException) -> JSONResponse:
-    return JSONResponse(
-        status_code=exc.status_code, content={"message": exc.message, "code": exc.code}
     )
 
 
