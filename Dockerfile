@@ -5,8 +5,9 @@ EXPOSE 8000
 COPY ./LICENSE /app
 COPY ./install.sh /app/install.sh
 COPY ./pyproject.toml /app/pyproject.toml
-COPY ./local_ecs_api /app/local_ecs_api
+RUN bash ./install.sh
 
-RUN bash ./install.sh && pip install -e .
+COPY ./local_ecs_api /app/local_ecs_api
+RUN pip install -e .
 
 CMD ["python", "/app/local_ecs_api/main.py"] 
