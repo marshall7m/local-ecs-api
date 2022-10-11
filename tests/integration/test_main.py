@@ -1,10 +1,13 @@
+import uuid
 import logging
 from pprint import pformat
 
 import pytest
 from fastapi.testclient import TestClient
-from moto import mock_ecs
+from moto import mock_ecs, mock_secretsmanager, mock_ssm
 import boto3
+from python_on_whales import docker
+
 from local_ecs_api.main import app
 from tests.data import task_defs
 
@@ -211,3 +214,58 @@ def test_run_task_pull_img_failure():
 
     assert response_data["tasks"][0]["stopCode"] == 18
     assert response_data["tasks"][0]["lastStatus"] == "STOPPED"
+
+
+@pytest.mark.usefixtures("aws_credentials")
+@mock_ecs
+@mock_secretsmanager
+@mock_ssm
+def test_run_task_with_secrets():
+    """
+    Ensures RunTask endpoint returns the expected response for task definitions
+    that contain secrets and decrypted secrets are passed to container
+    """
+    ecs = boto3.client("ecs")
+    ssm = boto3.client("ssm")
+    secret_manager = boto3.client("secretsmanager")
+
+    ssm_secret = "ssm-secret"
+    secret_manager_secret = "secret-manager-secret"
+
+    task_def = task_defs["fast_success"].copy()
+    ssm_key = f"secret-{uuid.uuid4()}"
+
+    # create mock SSM parameter store and Secret Manager secret
+    ssm.put_parameter(Name=ssm_key, Type="SecureString", Value=ssm_secret)
+    ssm_arn = ssm.get_parameter(Name=ssm_key)["Parameter"]["ARN"]
+
+    secret_manager_arn = secret_manager.create_secret(
+        Name=f"secret-{uuid.uuid4()}",
+        SecretString=secret_manager_secret,
+    )["ARN"]
+
+    task_def["containerDefinitions"][0]["secrets"] = [
+        {"name": "SSM_SECRET", "valueFrom": ssm_arn},
+        {"name": "SECRET_MANAGER_SECRET", "valueFrom": secret_manager_arn},
+    ]
+    task = ecs.register_task_definition(**task_def)
+
+    response = client.post(
+        "/",
+        headers={"x-amz-target": "RunTask"},
+        json={"taskDefinition": task["taskDefinition"]["taskDefinitionArn"]},
+    )
+    assert response.status_code == 200
+
+    response_data = response.json()
+    log.debug("Response:")
+    log.debug(pformat(response_data))
+
+    assert len(response_data["failures"]) == 0
+
+    # run inspect on container and returns list of str env vars
+    container_id = response_data["tasks"][0]["containers"][0]["runtimeId"]
+    container_env_vars = docker.container.inspect(container_id).config.env
+
+    assert f"SSM_SECRET={ssm_secret}" in container_env_vars
+    assert f"SECRET_MANAGER_SECRET={secret_manager_secret}" in container_env_vars

@@ -9,6 +9,7 @@ import shlex
 from pprint import pformat
 
 import ipaddress
+import boto3
 import random
 import yaml
 import struct
@@ -111,13 +112,50 @@ class DockerTask:
         self.docker.client_config.compose_files.extend(list(compose_files))
 
     def up(self, count: int):
+        log.info("Running ECS endpoint service")
         self.docker_ecs_endpoint.compose.up(quiet=True, detach=True)
 
-        for i in range(count):
-            log.debug(f"Count: {i+1}/{count}")
-            self.docker.compose.up(
-                quiet=True, build=True, detach=True, log_prefix=False
-            )
+        _environ = os.environ.copy()
+
+        log.info("Setting env vars for secrets")
+        ssm = boto3.client("ssm", endpoint_url=os.environ.get("SSM_ENDPOINT_URL"))
+        sm = boto3.client(
+            "secretsmanager", endpoint_url=os.environ.get("SECRET_MANAGER_ENDPOINT_URL")
+        )
+
+        try:
+            for container in self.task_def["containerDefinitions"]:
+                for secret in container.get("secrets", []):
+                    # scopes env vars to container by using container name as prefix.
+                    # when ecs-cli converts task def to compose, it will convert
+                    # all secrets to use this format within compose environment section
+                    name = f"{container['name']}_{secret['name']}"
+                    secret_type = secret["valueFrom"].split(":")[2]
+
+                    if secret_type == "ssm":
+                        os.environ[name] = ssm.get_parameter(
+                            Name=secret["valueFrom"]
+                            .split(":")[-1]
+                            .removeprefix("parameter/"),
+                            WithDecryption=True | False,
+                        )["Parameter"]["Value"]
+                    elif secret_type == "secretsmanager":
+                        os.environ[name] = sm.get_secret_value(
+                            SecretId=secret["valueFrom"]
+                        )["SecretString"]
+                    else:
+                        raise Exception(f"Secret type is not valid: {secret_type}")
+
+            for i in range(count):
+                log.debug(f"Count: {i+1}/{count}")
+                self.docker.compose.up(
+                    quiet=True, build=True, detach=True, log_prefix=False
+                )
+
+        finally:
+            # removes secrets used in up() from environment
+            os.environ.clear()
+            os.environ.update(_environ)
 
     def get_network_assigned_ips(self, network_name):
         return [
