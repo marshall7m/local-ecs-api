@@ -29,4 +29,5 @@ tests = [
     "pre-commit",
     "pytest",
     "moto",
+    "diagrams"
 ]

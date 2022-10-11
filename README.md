@@ -1,12 +1,10 @@
 # ECS Run Task Local API
 
-## Description
-
-Docker image that can be used to to test ECS task locally on local machine. The container will convert the ECS task definition to a local docker compose file, run `docker compose up` and translate local docker attributes into the approriate ECS API response.
+Docker image that can be used to test ECS tasks on a local machine. The container will convert the ECS task definition to a docker-compose file, run `docker compose up` and translate docker attributes into the appropriate ECS API response.
 
 ## Configurable Environment Variables:
 
-- `ECS_ENDPOINT_URL`: Custom endpoint for ECS requests made within the local API.
+- `ECS_ENDPOINT_URL`: Custom endpoint for ECS requests made within the local API. This endpoint URL will be used for redirecting any ECS requests that are not supported by this API and for retrieving the task definition to be converted into docker compose files.
 - `COMPOSE_DEST`: The directory where task definition conversion to compose files should be stored (defaults to `/tmp`)
 - `ECS_NETWORK_NAME`: Name of the local Docker network used for compose services and ECS local endpoint
 - `IAM_ENDPOINT`: Custom IAM endpoint the local ECS endpoint container will use for retrieving task AWS credentials
@@ -15,6 +13,40 @@ Docker image that can be used to to test ECS task locally on local machine. The 
    -  Retrieving AWS task credentials within local ECS endpoint container
 - `SECRET_MANAGER_ENDPOINT_URL`: Custom Secret Manager endpoint used to retrieve secrets specified within the task definition to load into containers
 - `SSM_ENDPOINT_URL`: Custom Systems Manager endpoint used to retrieve secrets specified within the task definition to load into containers
+- `AWS_ACCESS_KEY_ID`: AWS access key used for assuming task execution role and getting task definition
+- `AWS_SECRET_ACCESS_KEY`: AWS secret access key used for assuming task execution role and getting task definition
+
+
+## Credentials Requirements
+
+The local-ecs-api container somewhat simulates the ECS container agent used for running ECS tasks. This means that the container needs the appropriate AWS credentials to assume any ECS task execution roles that are given. The AWS credentials can be passed to the container via:
+
+1. Environment variables
+
+`docker-compose.yml`
+```
+version: '3.4'
+services:
+  local-ecs-api:
+    image: local-ecs-api:latest
+    environment:
+    - AWS_ACCESS_KEY_ID
+    - AWS_SECRET_ACCESS_KEY
+```
+
+2. AWS profile
+
+`docker-compose.yml`
+```
+version: '3.4'
+services:
+  local-ecs-api:
+    image: local-ecs-api:latest
+    environment:
+      - AWS_PROFILE=${AWS_PROFILE}
+    volumes:
+      - ~/.aws/:/root/.aws:ro
+```
 
 ## Example Usage
 
@@ -56,7 +88,7 @@ networks:
       driver: default
 ```
 
-Within the `app` container, AWS ECS API call can be directed to the
+Within the `app` container, AWS ECS API calls can be directed to the
 `local-ecs-api` container like so:
 
 Python via boto3 client:
@@ -74,15 +106,13 @@ AWS CLI:
 aws ecs run-task --cluster default --task-definition foo:1 --endpoint-url http://local-ecs-api:8000
 ```
 
-## RunTask to Docker
-
-The following are step used for converting ECS RunTask requests to local docker compose files
-
-1.
+## Design
+ 
+![Diagram](./diagram/local-ecs-api.png)
 
 ## Response Translation
 
-The following ECS responses will contain attribute that reference the local docker compose project
+The following ECS responses will contain attributes that reference the local docker compose project
 
 `RunTask`
 ```
