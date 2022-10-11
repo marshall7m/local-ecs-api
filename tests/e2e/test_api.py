@@ -26,7 +26,7 @@ def local_api():
     yield docker
 
     docker.compose.stop()
-    docker.compose.down()
+    # docker.compose.down()
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -61,6 +61,14 @@ def test_redirect_supported(aws_credentials):
     response = ecs.list_clusters()
 
     assert "clusterArns" in response
+
+
+def test_redirect_register_task_definition(aws_credentials):
+    """Ensures ECS API requests that aren't covered by local API are redirected to target AWS endpoint"""
+    ecs = boto3.client("ecs", endpoint_url=os.environ.get("LOCAL_ECS_API_ENDPOINT"))
+    response = ecs.register_task_definition(**task_defs["fast_success"])
+
+    assert "taskDefinition" in response
 
 
 def test_run_task(aws_credentials):
