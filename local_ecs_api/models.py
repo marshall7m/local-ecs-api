@@ -14,8 +14,7 @@ import boto3
 
 from local_ecs_api.converters import DockerTask
 
-
-log = logging.getLogger(__file__)
+log = logging.getLogger("local-ecs-api")
 log.setLevel(logging.DEBUG)
 
 

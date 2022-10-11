@@ -15,7 +15,7 @@ import yaml
 import struct
 from python_on_whales import DockerClient
 
-log = logging.getLogger(__name__)
+log = logging.getLogger("local-ecs-api")
 log.setLevel(logging.DEBUG)
 
 COMPOSE_DEST = os.environ.get("COMPOSE_DEST", "/tmp")

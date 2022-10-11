@@ -18,7 +18,7 @@ from local_ecs_api.models import (
     ECSBackend,
 )
 
-log = logging.getLogger(__name__)
+log = logging.getLogger("local-ecs-api")
 log.setLevel(logging.DEBUG)
 stream = logging.StreamHandler(sys.stdout)
 formatter = logging.Formatter("%(levelname)s:     %(message)s")
