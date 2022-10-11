@@ -11,6 +11,8 @@ Docker image that can be used to to test ECS task locally on local machine. The 
 - `ECS_NETWORK_NAME`: Name of the local Docker network used for compose services and ECS local endpoint
 - `IAM_ENDPOINT`: Custom IAM endpoint the local ECS endpoint container will use for retrieving task AWS credentials
 - `STS_ENDPOINT`: Custom STS endpoint the local ECS endpoint container will use for retrieving task AWS credentials
+- `SECRET_MANAGER_ENDPOINT_URL`: Custom Secret Manager endpoint used to retrieve secrets specified within the task definition to load into containers
+- `SSM_ENDPOINT_URL`: Custom Systems Manager endpoint used to retrieve secrets specified within the task definition to load into containers
 
 ## Example Usage
 
@@ -36,6 +38,8 @@ services:
     - IAM_ENDPOINT
     - STS_ENDPOINT
     - ECS_ENDPOINT_URL
+    - SECRET_MANAGER_ENDPOINT_URL
+    - SSM_ENDPOINT_URL
     - AWS_ACCESS_KEY_ID
     - AWS_SECRET_ACCESS_KEY
     - AWS_DEFAULT_REGION
@@ -58,14 +62,14 @@ Python via boto3 client:
 import boto3
 import os
 
-ecs = boto3.client("ecs", endpoint_url="http://local-ecs-network:8000"
+ecs = boto3.client("ecs", endpoint_url="http://local-ecs-api:8000"
 
 ecs.run_task(taskDefinition="arn:aws:ecs:us-west-2:123456789012:task-definition/foo:1")
 ```
 
 AWS CLI:
 ```
-aws ecs run-task --cluster default --task-definition foo:1 --endpoint-url http://local-ecs-network:8000
+aws ecs run-task --cluster default --task-definition foo:1 --endpoint-url http://local-ecs-api:8000
 ```
 
 ## RunTask to Docker
@@ -230,9 +234,8 @@ The following ECS responses will contain attribute that reference the local dock
 - add group attribute to describeTasks response
 
 
-- add e2e tests for testing redirects to ECS endpoint
 - add heredocs to converters.py
 - add heredocs to main.py
 - add heredocs to models.py
-
+- create diagram for RunTask functionality
 - add save() to RunTask function for saving to .pickle file
