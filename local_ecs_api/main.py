@@ -82,16 +82,29 @@ async def run_task(request: Request) -> RunTaskResponse:
 
 @app.post("/{full_path:path}")
 async def redirect(request: Request, full_path: str):
-    """Redirect request to endpoint specified witin $ECS_ENDPOINT_URL"""
+    """Redirect request to endpoint specified witin ECS_ENDPOINT_URL environment variable"""
+    redirect_url = os.environ.get("ECS_ENDPOINT_URL", "https://ecs.amazonaws.com")
+    log.info(f"Redirecting path: {request.scope['path']} to: {redirect_url}")
+
+    # AWS service APIs require resource path to be "/"
     request.scope["path"] = "/"
     data = await request.json()
 
-    response = requests.post(
-        os.environ.get("ECS_ENDPOINT_URL", "https://ecs.amazonaws.com"),
-        headers=dict(request.headers.items()),
-        json=data,
-        timeout=10,
-    )
+    if request.method == "POST":
+        response = requests.post(
+            os.environ.get("ECS_ENDPOINT_URL", "https://ecs.amazonaws.com"),
+            headers=dict(request.headers.items()),
+            json=data,
+            timeout=10,
+        )
+
+    if request.method == "GET":
+        response = requests.get(
+            os.environ.get("ECS_ENDPOINT_URL", "https://ecs.amazonaws.com"),
+            headers=dict(request.headers.items()),
+            json=data,
+            timeout=10,
+        )
 
     # translates requests.models.Response to starlette.responses.Response
     return Response(
