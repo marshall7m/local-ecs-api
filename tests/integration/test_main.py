@@ -4,7 +4,7 @@ from pprint import pformat
 
 import pytest
 from fastapi.testclient import TestClient
-from moto import mock_ecs, mock_secretsmanager, mock_ssm
+from moto import mock_ecs, mock_secretsmanager, mock_ssm, mock_sts
 import boto3
 from python_on_whales import docker
 
@@ -220,6 +220,7 @@ def test_run_task_pull_img_failure():
 @mock_ecs
 @mock_secretsmanager
 @mock_ssm
+@mock_sts
 def test_run_task_with_secrets():
     """
     Ensures RunTask endpoint returns the expected response for task definitions

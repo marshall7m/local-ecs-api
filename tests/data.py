@@ -48,6 +48,7 @@ task_defs = {
         ],
         "family": "fast_success",
         "taskRoleArn": "arn:aws:iam::12345679012:role/mock-task",
+        "executionRoleArn": "arn:aws:iam::12345679012:role/mock-task-execution",
     },
     "invalid_img": {
         "containerDefinitions": [

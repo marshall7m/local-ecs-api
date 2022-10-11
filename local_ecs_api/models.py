@@ -564,14 +564,17 @@ class ECSBackend:
         """
 
         ecs = boto3.client("ecs", endpoint_url=os.environ.get("ECS_ENDPOINT_URL"))
-
+        # use base AWS creds for getting task def
+        # so that the task execution role doesn't need extra permissions
         task_def = ecs.describe_task_definition(taskDefinition=kwargs["taskDefinition"])
         task = RunTaskBackend(task_def, **kwargs)
         task.create_docker_compose_stack(kwargs.get("overrides"))
         self.created_at = datetime.timestamp(datetime.now())
 
         try:
-            task.up(kwargs["count"])
+            task.up(
+                kwargs["count"], kwargs.get("overrides", {}).get("executionRoleArn")
+            )
         except DockerException as e:
             log.debug(f"Exit code {e.return_code} while running {e.docker_command}")
             task.run_exception = e

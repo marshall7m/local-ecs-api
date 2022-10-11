@@ -10,7 +10,9 @@ Docker image that can be used to to test ECS task locally on local machine. The 
 - `COMPOSE_DEST`: The directory where task definition conversion to compose files should be stored (defaults to `/tmp`)
 - `ECS_NETWORK_NAME`: Name of the local Docker network used for compose services and ECS local endpoint
 - `IAM_ENDPOINT`: Custom IAM endpoint the local ECS endpoint container will use for retrieving task AWS credentials
-- `STS_ENDPOINT`: Custom STS endpoint the local ECS endpoint container will use for retrieving task AWS credentials
+- `STS_ENDPOINT`: Custom STS endpoint used for:
+   -  Retrieving AWS execution role credentials within local-ecs-api container
+   -  Retrieving AWS task credentials within local ECS endpoint container
 - `SECRET_MANAGER_ENDPOINT_URL`: Custom Secret Manager endpoint used to retrieve secrets specified within the task definition to load into containers
 - `SSM_ENDPOINT_URL`: Custom Systems Manager endpoint used to retrieve secrets specified within the task definition to load into containers
 

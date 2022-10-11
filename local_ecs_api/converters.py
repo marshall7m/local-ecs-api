@@ -111,11 +111,26 @@ class DockerTask:
 
         self.docker.client_config.compose_files.extend(list(compose_files))
 
-    def up(self, count: int):
+    def up(self, count: int, override_execution_role_arn=None):
         log.info("Running ECS endpoint service")
         self.docker_ecs_endpoint.compose.up(quiet=True, detach=True)
 
         _environ = os.environ.copy()
+
+        execution_role = override_execution_role_arn or self.task_def.get(
+            "executionRoleArn"
+        )
+        if execution_role:
+            log.debug(f"Using task execution role: {execution_role}")
+            sts = boto3.client("sts", endpoint_url=os.environ.get("STS_ENDPOINT"))
+
+            creds = sts.assume_role(
+                RoleArn=execution_role, RoleSessionName=f"LocalTask-{self.id}"
+            )["Credentials"]
+
+            os.environ["AWS_ACCESS_KEY_ID"] = creds["AccessKeyId"]
+            os.environ["AWS_SECRET_ACCESS_KEY"] = creds["AccessKeyId"]
+            os.environ["AWS_SESSION_TOKEN"] = creds["AccessKeyId"]
 
         log.info("Setting env vars for secrets")
         ssm = boto3.client("ssm", endpoint_url=os.environ.get("SSM_ENDPOINT_URL"))
