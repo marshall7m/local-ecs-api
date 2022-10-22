@@ -98,7 +98,7 @@ async def redirect(request: Request, full_path: str):
             timeout=10,
         )
 
-    if request.method == "GET":
+    elif request.method == "GET":
         response = requests.get(
             os.environ.get("ECS_ENDPOINT_URL", "https://ecs.amazonaws.com"),
             headers=dict(request.headers.items()),
