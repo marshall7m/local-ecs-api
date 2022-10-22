@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "local-ecs-api"
-description = "Local ECS Run Task API"
-version = "0.0.1"
+description = "Run loocal ECS API within Docker container"
+version = "0.0.2"
 authors = [
     {"name" = "Marshall Mamiya"}
 ]
