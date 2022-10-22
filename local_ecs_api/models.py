@@ -306,24 +306,28 @@ class RunTaskBackend(DockerTask):
         response attachment attribute
         """
         attachments = []
-        for name in list(self.docker.compose.config().networks.keys()):
-            network = self.docker.network.inspect(name)
-            ipv4 = ""
-            for cfg in network.ipam.config:
-                if cfg.get("Gateway"):
-                    ipv4 = cfg.get("Gateway")
-                    break
-            attachments.append(
-                Attachments(
-                    id=network.id,
-                    type=network.driver,
-                    status="RUNNING",
-                    defails=[
-                        Details(name="privateDnsName", value=network.name),
-                        Details(name="privateIPv4Address", value=ipv4),
-                    ],
-                )
-            )
+        for c_id in self.docker.compose.ps():
+            log.debug("container ID")
+            log.debug(c_id)
+            c = self.docker.container.inspect(c_id)
+            log.debug("container inspect")
+            log.debug(c)
+            for name, network in c.network_settings.networks.items():
+                if network.get("Gateway"):
+                    attachments.append(
+                        Attachments(
+                            id=network.network_id,
+                            type=network.driver,
+                            status="RUNNING",
+                            defails=[
+                                Details(name="privateDnsName", value=name),
+                                Details(
+                                    name="privateIPv4Address",
+                                    value=network.get("Gateway"),
+                                ),
+                            ],
+                        )
+                    )
         return attachments
 
     @property
