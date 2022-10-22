@@ -19,7 +19,11 @@ log = logging.getLogger("local-ecs-api")
 log.setLevel(logging.DEBUG)
 
 COMPOSE_DEST = os.environ.get("COMPOSE_DEST", "/tmp")
-ECS_NETWORK_NAME = os.environ.get("ECS_NETWORK_NAME", "ecs-local-network")
+# env vars used to set network/volume names within local-ecs-endpoint compose project
+os.environ["ECS_NETWORK_NAME"] = os.environ.get("ECS_NETWORK_NAME", "ecs-local-network")
+os.environ["ECS_AWS_CREDS_VOLUME_NAME"] = os.environ.get(
+    "ECS_AWS_CREDS_VOLUME_NAME", "ecs-local-aws-creds-volume"
+)
 
 
 def random_ip(network):
@@ -111,55 +115,101 @@ class DockerTask:
 
         self.docker.client_config.compose_files.extend(list(compose_files))
 
+    def setup_aws_creds_volume(self):
+        if not self.docker_ecs_endpoint.volume.exists(
+            os.environ["ECS_AWS_CREDS_VOLUME_NAME"]
+        ):
+            log.debug(
+                f"Setting up AWS creds volume: {os.environ['ECS_AWS_CREDS_VOLUME_NAME']}"
+            )
+            self.docker_ecs_endpoint.volume.create(
+                volume_name=os.environ["ECS_AWS_CREDS_VOLUME_NAME"],
+                driver="local",
+                options={
+                    "o": "bind",
+                    "type": None,
+                    "device": os.environ["ECS_ENDPOINT_AWS_CREDS_HOST_PATH"],
+                },
+            )
+
+    def setup_task_secrets(self):
+        ssm = boto3.client("ssm", endpoint_url=os.environ.get("SSM_ENDPOINT_URL"))
+        sm = boto3.client(
+            "secretsmanager", endpoint_url=os.environ.get("SECRET_MANAGER_ENDPOINT_URL")
+        )
+
+        for container in self.task_def["containerDefinitions"]:
+            for secret in container.get("secrets", []):
+                # scopes env vars to container by using container name as prefix.
+                # when ecs-cli converts task def to compose, it will convert
+                # all secrets to use this format within compose environment section
+                name = f"{container['name']}_{secret['name']}"
+                secret_type = secret["valueFrom"].split(":")[2]
+
+                if secret_type == "ssm":
+                    os.environ[name] = ssm.get_parameter(
+                        Name=secret["valueFrom"]
+                        .split(":")[-1]
+                        .removeprefix("parameter/"),
+                        WithDecryption=True,
+                    )["Parameter"]["Value"]
+                elif secret_type == "secretsmanager":
+                    os.environ[name] = sm.get_secret_value(
+                        SecretId=secret["valueFrom"]
+                    )["SecretString"]
+                else:
+                    raise Exception(f"Secret type is not valid: {secret_type}")
+
+    def assume_task_execution_role(self, execution_role):
+        log.debug(f"Using task execution role: {execution_role}")
+        sts = boto3.client("sts", endpoint_url=os.environ.get("STS_ENDPOINT"))
+
+        creds = sts.assume_role(
+            RoleArn=execution_role, RoleSessionName=f"LocalTask-{self.id}"
+        )["Credentials"]
+
+        os.environ["AWS_ACCESS_KEY_ID"] = creds["AccessKeyId"]
+        os.environ["AWS_SECRET_ACCESS_KEY"] = creds["AccessKeyId"]
+        os.environ["AWS_SESSION_TOKEN"] = creds["AccessKeyId"]
+
+    def ecs_endpoint_up(self):
+        if all(
+            [
+                os.environ.get("ECS_ENDPOINT_AWS_PROFILE"),
+                os.environ.get("ECS_ENDPOINT_AWS_CREDS_HOST_PATH"),
+            ]
+        ):
+            self.setup_aws_creds_volume()
+
+            creds_overwrite_path = os.path.join(
+                os.path.dirname(__file__), "docker-compose.local-endpoint.aws_creds.yml"
+            )
+
+            if creds_overwrite_path not in self.docker.client_config.compose_files:
+                # adds volume as an external volume in endpoint compose project
+                self.docker_ecs_endpoint.client_config.compose_files.append(
+                    creds_overwrite_path
+                )
+
+        self.docker_ecs_endpoint.compose.up(quiet=True, detach=True)
+
     def up(self, count: int, override_execution_role_arn=None):
         log.info("Running ECS endpoint service")
-        self.docker_ecs_endpoint.compose.up(quiet=True, detach=True)
+        self.ecs_endpoint_up()
 
         _environ = os.environ.copy()
 
         execution_role = override_execution_role_arn or self.task_def.get(
             "executionRoleArn"
         )
-        if execution_role:
-            log.debug(f"Using task execution role: {execution_role}")
-            sts = boto3.client("sts", endpoint_url=os.environ.get("STS_ENDPOINT"))
-
-            creds = sts.assume_role(
-                RoleArn=execution_role, RoleSessionName=f"LocalTask-{self.id}"
-            )["Credentials"]
-
-            os.environ["AWS_ACCESS_KEY_ID"] = creds["AccessKeyId"]
-            os.environ["AWS_SECRET_ACCESS_KEY"] = creds["AccessKeyId"]
-            os.environ["AWS_SESSION_TOKEN"] = creds["AccessKeyId"]
-
-        log.info("Setting env vars for secrets")
-        ssm = boto3.client("ssm", endpoint_url=os.environ.get("SSM_ENDPOINT_URL"))
-        sm = boto3.client(
-            "secretsmanager", endpoint_url=os.environ.get("SECRET_MANAGER_ENDPOINT_URL")
-        )
 
         try:
-            for container in self.task_def["containerDefinitions"]:
-                for secret in container.get("secrets", []):
-                    # scopes env vars to container by using container name as prefix.
-                    # when ecs-cli converts task def to compose, it will convert
-                    # all secrets to use this format within compose environment section
-                    name = f"{container['name']}_{secret['name']}"
-                    secret_type = secret["valueFrom"].split(":")[2]
+            log.info("Assuming task execution role")
+            if execution_role:
+                self.assume_task_execution_role(execution_role)
 
-                    if secret_type == "ssm":
-                        os.environ[name] = ssm.get_parameter(
-                            Name=secret["valueFrom"]
-                            .split(":")[-1]
-                            .removeprefix("parameter/"),
-                            WithDecryption=True | False,
-                        )["Parameter"]["Value"]
-                    elif secret_type == "secretsmanager":
-                        os.environ[name] = sm.get_secret_value(
-                            SecretId=secret["valueFrom"]
-                        )["SecretString"]
-                    else:
-                        raise Exception(f"Secret type is not valid: {secret_type}")
+            log.info("Setting env vars for task secrets")
+            self.setup_task_secrets()
 
             for i in range(count):
                 log.debug(f"Count: {i+1}/{count}")
@@ -179,14 +229,12 @@ class DockerTask:
         ]
 
     def generate_local_compose_network_file(self, path):
-        local_subnet = self.docker.network.inspect(ECS_NETWORK_NAME).ipam.config[0][
-            "Subnet"
-        ]
-        log.debug(f"Network: {ECS_NETWORK_NAME}")
-        log.debug(f"Subnet: {local_subnet}")
+        local_subnet = self.docker.network.inspect(
+            os.environ["ECS_NETWORK_NAME"]
+        ).ipam.config[0]["Subnet"]
 
         config = self.docker.compose.config()
-        assigned = self.get_network_assigned_ips(ECS_NETWORK_NAME)
+        assigned = self.get_network_assigned_ips(os.environ["ECS_NETWORK_NAME"])
         for _ in range(len(config.services)):
             rand_ip = None
             while rand_ip is None or rand_ip in assigned:
@@ -195,9 +243,13 @@ class DockerTask:
 
         file_content = {
             "version": "3.4",
-            "networks": {ECS_NETWORK_NAME: {"external": True}},
+            "networks": {os.environ["ECS_NETWORK_NAME"]: {"external": True}},
             "services": {
-                service: {"networks": {ECS_NETWORK_NAME: {"ipv4_address": assigned[i]}}}
+                service: {
+                    "networks": {
+                        os.environ["ECS_NETWORK_NAME"]: {"ipv4_address": assigned[i]}
+                    }
+                }
                 for i, service in enumerate(config.services)
             },
         }

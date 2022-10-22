@@ -5,7 +5,7 @@ from pprint import pformat
 
 import pytest
 import boto3
-from python_on_whales import DockerClient
+from python_on_whales import DockerClient, docker
 from python_on_whales.exceptions import DockerException
 
 from tests.data import task_defs
@@ -16,17 +16,64 @@ log.setLevel(logging.DEBUG)
 FILE_DIR = os.path.dirname(__file__)
 
 
-@pytest.fixture(scope="module", autouse=True)
-def local_api():
-    os.environ["NETWORK_NAME"] = "local-ecs-api-tests"
-    docker = DockerClient(compose_files=[os.path.join(FILE_DIR, "docker-compose.yml")])
+@pytest.fixture(
+    scope="module",
+    autouse=True,
+    params=[
+        {
+            "ECS_ENDPOINT_AWS_ACCESS_KEY_ID": "mock-aws-creds",
+            "ECS_ENDPOINT_AWS_REGION": "us-west-2",
+            "ECS_ENDPOINT_AWS_SECRET_ACCESS_KEY": "mock-aws-creds",
+        },
+        {
+            "ECS_ENDPOINT_AWS_PROFILE": "test",
+            "ECS_ENDPOINT_AWS_CREDS_HOST_PATH": os.path.join(
+                os.path.dirname(__file__), "mock_aws_creds"
+            ),
+            "ECS_AWS_CREDS_VOLUME_NAME": "test-ecs-endpoint-aws-creds",
+        },
+    ],
+    ids=["env_var_creds", "volume_creds"],
+)
+def compose_env_vars(request):
+    _environ = os.environ.copy()
 
-    docker.compose.up(build=True, detach=True, quiet=True)
+    for k, v in request.param.items():
+        os.environ[k] = v
+
+    yield request.param
+
+    os.environ.clear()
+    os.environ.update(_environ)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def local_api(compose_env_vars):
+
+    os.environ["NETWORK_NAME"] = "local-ecs-api-tests"
+    os.environ["ECS_NETWORK_NAME"] = "test-ecs-local-network"
+
+    client = DockerClient(compose_files=[os.path.join(FILE_DIR, "docker-compose.yml")])
+
+    client.compose.up(build=True, detach=True, quiet=True)
 
     yield docker
 
-    docker.compose.stop()
-    # docker.compose.down()
+    client.compose.stop()
+    # TODO: conditionally run docker compose down only if all tests pass
+    # else keep orphan container to check out logs
+    # client.compose.down()
+
+    if os.environ.get("ECS_AWS_CREDS_VOLUME_NAME"):
+        client.volume.remove(os.environ.get("ECS_AWS_CREDS_VOLUME_NAME"))
+
+    containers = list(
+        client.network.inspect(os.environ["ECS_NETWORK_NAME"]).containers.keys()
+    )
+    log.debug(pformat(containers))
+
+    client.container.remove(containers, force=True, volumes=True)
+    client.network.remove(os.environ.get("ECS_NETWORK_NAME"))
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -39,7 +86,6 @@ def connect_tests_to_api(local_api):
         with open("/etc/hostname", "r", encoding="utf-8") as f:
             container_id = f.read().strip()
             try:
-                docker = DockerClient()
                 docker.network.connect(os.environ["NETWORK_NAME"], container_id)
             except DockerException as e:
                 if re.search(r"already exists in network", e.stderr):
@@ -79,6 +125,10 @@ def test_run_task(aws_credentials):
     )
     log.debug("Run task response")
     log.debug(pformat(response))
+
+    if os.environ.get("ECS_AWS_CREDS_VOLUME_NAME"):
+        log.info("Assert AWS creds volume exists after RunTask call")
+        assert docker.volume.exists(os.environ["ECS_AWS_CREDS_VOLUME_NAME"]) is True
 
 
 @pytest.mark.skip()

@@ -8,7 +8,7 @@ services:
       local-ecs-api-tests:
   local-ecs-api:
     build: ../../
-    image: local-ecs-api
+    image: marshall7m/local-ecs-api:latest
     restart: always
     volumes:
     - /usr/bin/docker:/usr/bin/docker
@@ -17,12 +17,27 @@ services:
     - 8000:8000
     environment:
     - COMPOSE_DEST
+
     - IAM_ENDPOINT=${MOTO_ENDPOINT_URL}
     - STS_ENDPOINT=${MOTO_ENDPOINT_URL}
     - ECS_ENDPOINT_URL=${MOTO_ENDPOINT_URL}
+    - SSM_ENDPOINT_URL=${MOTO_ENDPOINT_URL}
+    - SECRET_MANAGER_ENDPOINT_URL=${MOTO_ENDPOINT_URL}
+
     - AWS_ACCESS_KEY_ID=mock
     - AWS_SECRET_ACCESS_KEY=mock
     - AWS_DEFAULT_REGION=us-east-1
+
+    - ECS_ENDPOINT_AWS_REGION=us-west-2
+    - ECS_NETWORK_NAME
+
+    - ECS_AWS_CREDS_VOLUME_NAME
+    - ECS_ENDPOINT_AWS_PROFILE
+    - ECS_ENDPOINT_AWS_CREDS_HOST_PATH
+
+    - ECS_ENDPOINT_AWS_ACCESS_KEY_ID
+    - ECS_ENDPOINT_AWS_SECRET_ACCESS_KEY
+
     networks:
       local-ecs-api-tests:
 

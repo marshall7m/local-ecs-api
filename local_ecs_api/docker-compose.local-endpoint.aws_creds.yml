@@ -1,0 +1,4 @@
+volumes:
+  ecs-local-aws-creds:
+    name: ${ECS_AWS_CREDS_VOLUME_NAME}
+    external: true

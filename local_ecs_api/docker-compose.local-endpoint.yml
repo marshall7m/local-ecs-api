@@ -1,7 +1,7 @@
 version: '3.4'
 networks:
   ecs-local-network:
-    name: ecs-local-network
+    name: ${ECS_NETWORK_NAME}
     driver: bridge
     ipam:
       config:
@@ -14,9 +14,14 @@ services:
     - /var/run/docker.sock:/var/run/docker.sock
     - /usr/bin/docker:/usr/bin/docker
     environment:
-    # endpoints need to be set within local-ecs-api container
     - IAM_ENDPOINT
     - STS_ENDPOINT
+
+    - AWS_PROFILE=${ECS_ENDPOINT_AWS_PROFILE}
+
+    - AWS_ACCESS_KEY_ID=${ECS_ENDPOINT_AWS_ACCESS_KEY_ID}
+    - AWS_REGION=${ECS_ENDPOINT_AWS_REGION}
+    - AWS_SECRET_ACCESS_KEY=${ECS_ENDPOINT_AWS_SECRET_ACCESS_KEY}
     networks:
       ecs-local-network:
         ipv4_address: 169.254.170.2
