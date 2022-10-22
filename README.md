@@ -271,3 +271,33 @@ The following ECS responses will contain attributes that reference the local doc
 - add heredocs to models.py
 - create diagram for RunTask functionality
 - add save() to RunTask function for saving to .pickle file
+
+
+
+- container needs to have the following permission:
+   ecs:describetasks on all resources
+   - create predefined ECS local endpoint docker compose files for
+      - AWS env creds
+      - AWS profile
+   - create ENV var to specify shared volume mount to add user-defined override compose files for endpoint or tasks
+
+- create async background task to monitor when ecs task containers stop. if container stopped, gather container metadata and then remove container? ensures that subsequent RunTask calls will not use the stopped container but an entirely new one
+
+see if coupling local endpoint servicce to task will cause any issue
+if not have it where user can define compose override files that contain the proper filename suffix
+then they can override the task's local ecs endpoint config with the proper AWS creds to retreive creds
+for tasks
+
+create env vars for AWS cred mount
+
+- ECS_ENDPOINT_AWS_PROFILE
+- ECS_ENDPOINT_AWS_CREDS_HOST_PATH
+
+- ECS_ENDPOINT_AWS_ACCESS_KEY_ID
+- ECS_ENDPOINT_AWS_REGION
+- ECS_ENDPOINT_AWS_SECRET_ACCESS_KEY
+
+1. if above env vars are present in local-ecs-api, create independent docker volume for mounting AWS creds from host
+2. then use pre-defined local-ecs-endpoint compose file that has the external mount defined
+
+1. or use aws environment variable passed
