@@ -53,7 +53,14 @@
 	"remoteUser": "vscode",
 	"postStartCommand": "/bin/bash ./.devcontainer/entrypoint.sh",
 	"features": {
-		"docker-from-docker": "latest",
-		"github-cli": "latest"
+		"ghcr.io/devcontainers/features/docker-from-docker:1": {
+			"version": "latest"
+		  },
+		"ghcr.io/devcontainers/features/git:1": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers/features/github-cli:1": {
+			"version": "latest"
+		}
 	}
 }
