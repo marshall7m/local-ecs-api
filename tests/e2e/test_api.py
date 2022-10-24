@@ -6,8 +6,9 @@ from pprint import pformat
 import pytest
 import boto3
 from python_on_whales import DockerClient, docker
-from python_on_whales.exceptions import DockerException
+from python_on_whales.exceptions import DockerException, NoSuchVolume
 
+from local_ecs_api.converters import ECS_NETWORK_NAME
 from tests.data import task_defs
 
 log = logging.getLogger(__name__)
@@ -37,7 +38,6 @@ FILE_DIR = os.path.dirname(__file__)
 )
 def compose_env_vars(request):
     _environ = os.environ.copy()
-
     for k, v in request.param.items():
         os.environ[k] = v
 
@@ -48,10 +48,9 @@ def compose_env_vars(request):
 
 
 @pytest.fixture(scope="module", autouse=True)
-def local_api(compose_env_vars):
+def local_api(request, compose_env_vars):
 
     os.environ["NETWORK_NAME"] = "local-ecs-api-tests"
-    os.environ["ECS_NETWORK_NAME"] = "test-ecs-local-network"
 
     client = DockerClient(compose_files=[os.path.join(FILE_DIR, "docker-compose.yml")])
 
@@ -60,38 +59,41 @@ def local_api(compose_env_vars):
     yield docker
 
     client.compose.stop()
-    # TODO: conditionally run docker compose down only if all tests pass
-    # else keep orphan container to check out logs
-    # client.compose.down()
+
+    if not getattr(request.node.obj, "any_failures", False):
+        client.compose.down()
 
     if os.environ.get("ECS_AWS_CREDS_VOLUME_NAME"):
-        client.volume.remove(os.environ.get("ECS_AWS_CREDS_VOLUME_NAME"))
+        try:
+            client.volume.remove(os.environ.get("ECS_AWS_CREDS_VOLUME_NAME"))
+        except NoSuchVolume:
+            log.debug(
+                "Volume does not exist: %s", os.environ.get("ECS_AWS_CREDS_VOLUME_NAME")
+            )
 
-    containers = list(
-        client.network.inspect(os.environ["ECS_NETWORK_NAME"]).containers.keys()
-    )
+    containers = list(client.network.inspect(ECS_NETWORK_NAME).containers.keys())
     log.debug(pformat(containers))
 
     client.container.remove(containers, force=True, volumes=True)
-    client.network.remove(os.environ.get("ECS_NETWORK_NAME"))
+    client.network.remove(ECS_NETWORK_NAME)
 
 
 @pytest.fixture(scope="module", autouse=True)
 def connect_tests_to_api(local_api):
     # CI env var will be set if running in GitHub Action job
     if not os.environ.get("CI"):
-        os.environ["LOCAL_ECS_API_ENDPOINT"] = "http://" + "local-ecs-api" + ":8000"
+        os.environ["LOCAL_ECS_API_ENDPOINT"] = "http://local-ecs-api:8000"
         # needed only if running tests within container
         log.debug("Connecting dev container to API network")
         with open("/etc/hostname", "r", encoding="utf-8") as f:
             container_id = f.read().strip()
             try:
                 docker.network.connect(os.environ["NETWORK_NAME"], container_id)
-            except DockerException as e:
-                if re.search(r"already exists in network", e.stderr):
+            except DockerException as err:
+                if re.search(r"already exists in network", err.stderr):
                     log.debug("Container is already associated")
                 else:
-                    raise e
+                    raise err
 
         yield
 
@@ -101,29 +103,23 @@ def connect_tests_to_api(local_api):
         yield
 
 
-def test_redirect_supported(aws_credentials):
-    """Ensures ECS API requests that aren't covered by local API are redirected to target AWS endpoint"""
+@pytest.mark.usefixtures("aws_credentials")
+def test_redirect_supported():
+    """Ensures ECS API requests that aren't covered by local API are redirected to target AWS ECS endpoint"""
     ecs = boto3.client("ecs", endpoint_url=os.environ.get("LOCAL_ECS_API_ENDPOINT"))
     response = ecs.list_clusters()
 
     assert "clusterArns" in response
 
 
-def test_redirect_register_task_definition(aws_credentials):
-    """Ensures ECS API requests that aren't covered by local API are redirected to target AWS endpoint"""
-    ecs = boto3.client("ecs", endpoint_url=os.environ.get("LOCAL_ECS_API_ENDPOINT"))
-    response = ecs.register_task_definition(**task_defs["fast_success"])
-
-    assert "taskDefinition" in response
-
-
-def test_run_task(aws_credentials):
+@pytest.mark.usefixtures("aws_credentials")
+def test_run_task_success():
     ecs = boto3.client("ecs", endpoint_url=os.environ.get("LOCAL_ECS_API_ENDPOINT"))
     task = ecs.register_task_definition(**task_defs["fast_success"])
     response = ecs.run_task(
         taskDefinition=task["taskDefinition"]["taskDefinitionArn"],
     )
-    log.debug("Run task response")
+    log.debug("Response:")
     log.debug(pformat(response))
 
     if os.environ.get("ECS_AWS_CREDS_VOLUME_NAME"):
@@ -131,11 +127,17 @@ def test_run_task(aws_credentials):
         assert docker.volume.exists(os.environ["ECS_AWS_CREDS_VOLUME_NAME"]) is True
 
 
-@pytest.mark.skip()
+@pytest.mark.usefixtures("aws_credentials")
 def test_describe_tasks():
-    pass
+    ecs = boto3.client("ecs", endpoint_url=os.environ.get("LOCAL_ECS_API_ENDPOINT"))
+    response = ecs.describe_tasks(tasks=[])
+    log.debug("Response:")
+    log.debug(pformat(response))
 
 
-@pytest.mark.skip()
+@pytest.mark.usefixtures("aws_credentials")
 def test_list_tasks():
-    pass
+    ecs = boto3.client("ecs", endpoint_url=os.environ.get("LOCAL_ECS_API_ENDPOINT"))
+    response = ecs.list_tasks()
+    log.debug("Response:")
+    log.debug(pformat(response))
