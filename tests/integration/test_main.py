@@ -18,6 +18,7 @@ client = TestClient(app)
 
 
 @mock_ecs
+@mock_sts
 def test_list_tasks(aws_credentials):
     """
     Ensures ListTask endpoint returns the expected list of task ARNs
@@ -54,6 +55,7 @@ def test_list_tasks(aws_credentials):
 
 
 @mock_ecs
+@mock_sts
 def test_describe_tasks_gets_updated_results(aws_credentials):
     """
     Ensures DescribeTasks endpoint returns the expected response for filtering
@@ -98,6 +100,7 @@ def test_describe_tasks_gets_updated_results(aws_credentials):
 
 @pytest.mark.usefixtures("aws_credentials")
 @mock_ecs
+@mock_sts
 def test_run_task_with_success():
     """
     Ensures RunTask endpoint returns the expected response for task definitions
@@ -128,6 +131,7 @@ def test_run_task_with_success():
 
 @pytest.mark.usefixtures("aws_credentials")
 @mock_ecs
+@mock_sts
 def test_run_task_with_failure():
     """
     Ensures RunTask endpoint returns the expected response for task definitions
@@ -152,6 +156,7 @@ def test_run_task_with_failure():
 
 @pytest.mark.usefixtures("aws_credentials")
 @mock_ecs
+@mock_sts
 def test_run_task_with_successful_overrides():
     """
     Ensures RunTask endpoint returns the expected response for task definitions
@@ -191,6 +196,7 @@ def test_run_task_with_successful_overrides():
 
 @pytest.mark.usefixtures("aws_credentials")
 @mock_ecs
+@mock_sts
 def test_run_task_pull_img_failure():
     """
     Ensures RunTask endpoint returns the expected response for task definitions
