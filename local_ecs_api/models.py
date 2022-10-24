@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import uuid
 from datetime import datetime
 import logging
 from typing import List, Optional, Any, Dict
@@ -307,27 +308,23 @@ class RunTaskBackend(DockerTask):
         """
         attachments = []
         for c_id in self.docker.compose.ps():
-            log.debug("container ID")
-            log.debug(c_id)
-            c = self.docker.container.inspect(c_id)
-            log.debug("container inspect")
-            log.debug(c)
-            for name, network in c.network_settings.networks.items():
-                if network.get("Gateway"):
-                    attachments.append(
-                        Attachments(
-                            id=network.network_id,
-                            type=network.driver,
-                            status="RUNNING",
-                            defails=[
-                                Details(name="privateDnsName", value=name),
-                                Details(
-                                    name="privateIPv4Address",
-                                    value=network.get("Gateway"),
-                                ),
-                            ],
-                        )
+            inspect = self.docker.container.inspect(c_id)
+            for name, network in inspect.network_settings.networks.items():
+                attachments.append(
+                    Attachments(
+                        id=str(uuid.uuid4()),
+                        type="ElasticNetworkInterface",
+                        status="ATTACHED",
+                        defails=[
+                            Details(name="privateDnsName", value=name),
+                            Details(
+                                name="networkInterfaceId", value=network.network_id
+                            ),
+                            Details(name="macAddress", value=network.mac_address),
+                            Details(name="privateIPv4Address", value=network.gateway),
+                        ],
                     )
+                )
         return attachments
 
     @property
@@ -493,7 +490,7 @@ class ECSBackend:
         with open(self.pickle_path, "wb") as f:
             pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
 
-    def describe_tasks(self, tasks: List[str], include=[]) -> Dict[str, Any]:
+    def describe_tasks(self, tasks: List[str], include=None) -> Dict[str, Any]:
         """
         Returns ECS DescribeTask response replaced with local docker compose container values
 
