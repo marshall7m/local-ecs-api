@@ -18,10 +18,9 @@ from python_on_whales import DockerClient
 log = logging.getLogger("local-ecs-api")
 log.setLevel(logging.DEBUG)
 
+ECS_NETWORK_NAME = "ecs-local-network"
 COMPOSE_DEST = os.environ.get("COMPOSE_DEST", "/tmp")
-# env vars used to set network/volume names within local-ecs-endpoint compose project
-os.environ["ECS_NETWORK_NAME"] = os.environ.get("ECS_NETWORK_NAME", "ecs-local-network")
-os.environ["ECS_AWS_CREDS_VOLUME_NAME"] = os.environ.get(
+ECS_AWS_CREDS_VOLUME_NAME = os.environ.get(
     "ECS_AWS_CREDS_VOLUME_NAME", "ecs-local-aws-creds-volume"
 )
 
@@ -74,7 +73,7 @@ class DockerTask:
             tmp.flush()
 
             cmd = f"ecs-cli local create --force --task-def-file {tmp.name} --output {path} --use-role"
-            log.debug(f"Running command: {cmd}")
+            log.debug("Running command: %s", cmd)
             subprocess.run(shlex.split(cmd), check=True)
 
         return path
@@ -116,14 +115,10 @@ class DockerTask:
         self.docker.client_config.compose_files.extend(list(compose_files))
 
     def setup_aws_creds_volume(self):
-        if not self.docker_ecs_endpoint.volume.exists(
-            os.environ["ECS_AWS_CREDS_VOLUME_NAME"]
-        ):
-            log.debug(
-                f"Setting up AWS creds volume: {os.environ['ECS_AWS_CREDS_VOLUME_NAME']}"
-            )
+        if not self.docker_ecs_endpoint.volume.exists(ECS_AWS_CREDS_VOLUME_NAME):
+            log.debug(f"Setting up AWS creds volume: {ECS_AWS_CREDS_VOLUME_NAME}")
             self.docker_ecs_endpoint.volume.create(
-                volume_name=os.environ["ECS_AWS_CREDS_VOLUME_NAME"],
+                volume_name=ECS_AWS_CREDS_VOLUME_NAME,
                 driver="local",
                 options={
                     "o": "bind",
@@ -190,6 +185,7 @@ class DockerTask:
                 self.docker_ecs_endpoint.client_config.compose_files.append(
                     creds_overwrite_path
                 )
+            os.environ["ECS_AWS_CREDS_VOLUME_NAME"] = ECS_AWS_CREDS_VOLUME_NAME
 
         self.docker_ecs_endpoint.compose.up(quiet=True, detach=True)
 
@@ -218,7 +214,7 @@ class DockerTask:
                 )
 
         finally:
-            # removes secrets used in up() from environment
+            # removes secrets used in docker compose up environment
             os.environ.clear()
             os.environ.update(_environ)
 
@@ -229,12 +225,12 @@ class DockerTask:
         ]
 
     def generate_local_compose_network_file(self, path):
-        local_subnet = self.docker.network.inspect(
-            os.environ["ECS_NETWORK_NAME"]
-        ).ipam.config[0]["Subnet"]
+        local_subnet = self.docker.network.inspect(ECS_NETWORK_NAME).ipam.config[0][
+            "Subnet"
+        ]
 
         config = self.docker.compose.config()
-        assigned = self.get_network_assigned_ips(os.environ["ECS_NETWORK_NAME"])
+        assigned = self.get_network_assigned_ips(ECS_NETWORK_NAME)
         for _ in range(len(config.services)):
             rand_ip = None
             while rand_ip is None or rand_ip in assigned:
@@ -243,13 +239,9 @@ class DockerTask:
 
         file_content = {
             "version": "3.4",
-            "networks": {os.environ["ECS_NETWORK_NAME"]: {"external": True}},
+            "networks": {ECS_NETWORK_NAME: {"external": True}},
             "services": {
-                service: {
-                    "networks": {
-                        os.environ["ECS_NETWORK_NAME"]: {"ipv4_address": assigned[i]}
-                    }
-                }
+                service: {"networks": {ECS_NETWORK_NAME: {"ipv4_address": assigned[i]}}}
                 for i, service in enumerate(config.services)
             },
         }

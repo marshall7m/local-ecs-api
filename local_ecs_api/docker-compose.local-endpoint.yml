@@ -1,7 +1,7 @@
 version: '3.4'
 networks:
   ecs-local-network:
-    name: ${ECS_NETWORK_NAME}
+    name: ecs-local-network
     driver: bridge
     ipam:
       config:
