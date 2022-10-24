@@ -31,3 +31,4 @@ tests = [
     "moto",
     "diagrams"
 ]
+py_modules = ["local-ecs-api"]
