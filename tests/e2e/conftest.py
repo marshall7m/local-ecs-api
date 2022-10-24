@@ -1,0 +1,9 @@
+import pytest
+
+
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    res = outcome.get_result()
+    if res.outcome == "failed":
+        item.module.any_failures = True
