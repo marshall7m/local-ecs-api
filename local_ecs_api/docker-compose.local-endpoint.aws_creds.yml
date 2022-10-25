@@ -1,3 +1,11 @@
+version: '3.4'
+
+services:
+  ecs-local-endpoints:
+    image: amazon/amazon-ecs-local-container-endpoints
+    volumes:
+    - $ECS_AWS_CREDS_VOLUME_NAME:/home/.aws
+
 volumes:
   ecs-local-aws-creds:
     name: ${ECS_AWS_CREDS_VOLUME_NAME}
