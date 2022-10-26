@@ -20,9 +20,9 @@ log.setLevel(logging.DEBUG)
 
 ECS_NETWORK_NAME = "ecs-local-network"
 COMPOSE_DEST = os.environ.get("COMPOSE_DEST", "/tmp")
-ECS_AWS_CREDS_VOLUME_NAME = os.environ.get(
-    "ECS_AWS_CREDS_VOLUME_NAME", "ecs-local-aws-creds-volume"
-)
+EXTERNAL_NETWORKS = [
+    net for net in os.environ.get("ECS_EXTERNAL_NETWORKS", "").split(",") if net != ""
+]
 
 
 def random_ip(network):
@@ -87,6 +87,12 @@ class DockerTask:
             os.path.join(self.compose_dir, "docker-compose.ecs-local.task.yml"),
         )
 
+        self.generate_local_compose_network_file(
+            os.path.join(
+                self.compose_dir, "docker-compose.ecs-local.task-network-override.yml"
+            )
+        )
+
         if overrides:
             log.info("Creating overrides task definition")
             overrides["containerDefinitions"] = overrides.pop("containerOverrides")
@@ -113,19 +119,6 @@ class DockerTask:
                 compose_files.add(path)
 
         self.docker.client_config.compose_files.extend(list(compose_files))
-
-    def setup_aws_creds_volume(self):
-        if not self.docker_ecs_endpoint.volume.exists(ECS_AWS_CREDS_VOLUME_NAME):
-            log.debug(f"Setting up AWS creds volume: {ECS_AWS_CREDS_VOLUME_NAME}")
-            self.docker_ecs_endpoint.volume.create(
-                volume_name=ECS_AWS_CREDS_VOLUME_NAME,
-                driver="local",
-                options={
-                    "o": "bind",
-                    "type": None,
-                    "device": os.environ["ECS_ENDPOINT_AWS_CREDS_HOST_PATH"],
-                },
-            )
 
     def setup_task_secrets(self):
         ssm = boto3.client("ssm", endpoint_url=os.environ.get("SSM_ENDPOINT_URL"))
@@ -171,10 +164,10 @@ class DockerTask:
         if all(
             [
                 os.environ.get("ECS_ENDPOINT_AWS_PROFILE"),
-                os.environ.get("ECS_ENDPOINT_AWS_CREDS_HOST_PATH"),
+                os.environ.get("ECS_AWS_CREDS_VOLUME_NAME"),
             ]
         ):
-            self.setup_aws_creds_volume()
+            # self.setup_aws_creds_volume()
 
             creds_overwrite_path = os.path.join(
                 os.path.dirname(__file__), "docker-compose.local-endpoint.aws_creds.yml"
@@ -185,9 +178,15 @@ class DockerTask:
                 self.docker_ecs_endpoint.client_config.compose_files.append(
                     creds_overwrite_path
                 )
-            os.environ["ECS_AWS_CREDS_VOLUME_NAME"] = ECS_AWS_CREDS_VOLUME_NAME
 
         self.docker_ecs_endpoint.compose.up(quiet=True, detach=True)
+        for network in EXTERNAL_NETWORKS:
+            endpoint_container_name = (
+                self.docker_ecs_endpoint.compose.config()
+                .services["ecs-local-endpoints"]
+                .container_name
+            )
+            self.docker_ecs_endpoint.network.connect(network, endpoint_container_name)
 
     def up(self, count: int, override_execution_role_arn=None):
         log.info("Running ECS endpoint service")
@@ -237,11 +236,22 @@ class DockerTask:
                 rand_ip = random_ip(local_subnet)
             assigned.append(rand_ip)
 
+        networks = {ECS_NETWORK_NAME: {"external": True}}
+        service_networks = {}
+        for network in EXTERNAL_NETWORKS:
+            networks[network] = {"external": True}
+            service_networks[network] = {}
+
         file_content = {
             "version": "3.4",
-            "networks": {ECS_NETWORK_NAME: {"external": True}},
+            "networks": networks,
             "services": {
-                service: {"networks": {ECS_NETWORK_NAME: {"ipv4_address": assigned[i]}}}
+                service: {
+                    "networks": {
+                        **service_networks,
+                        **{ECS_NETWORK_NAME: {"ipv4_address": assigned[i]}},
+                    }
+                }
                 for i, service in enumerate(config.services)
             },
         }
