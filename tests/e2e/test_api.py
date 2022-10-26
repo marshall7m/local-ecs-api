@@ -10,7 +10,7 @@ import boto3
 from python_on_whales import DockerClient, docker
 from python_on_whales.exceptions import DockerException
 
-from local_ecs_api.converters import ECS_NETWORK_NAME
+from local_ecs_api.converters import ECS_NETWORK_NAME, DOCKER_PROJECT_PREFIX
 from tests.data import task_defs
 
 log = logging.getLogger(__name__)
@@ -92,6 +92,7 @@ def test_redirect_supported():
 def test_run_task():
     ecs = boto3.client("ecs", endpoint_url=os.environ.get("LOCAL_ECS_API_ENDPOINT"))
     task = ecs.register_task_definition(**task_defs["fast_success"])
+
     response = ecs.run_task(
         taskDefinition=task["taskDefinition"]["taskDefinitionArn"],
     )
@@ -130,12 +131,39 @@ def test_run_task_aws_call(mock_task_role_arn):
 
     ecs = boto3.client("ecs", endpoint_url=os.environ.get("LOCAL_ECS_API_ENDPOINT"))
     task = ecs.register_task_definition(**task_def)
-
     response = ecs.run_task(
         taskDefinition=task["taskDefinition"]["taskDefinitionArn"],
     )
     log.debug("Response:")
     log.debug(pformat(response))
+
+
+@pytest.mark.usefixtures("aws_credentials")
+def test_multiple_run_task_calls(mock_task_role_arn):
+    ecs = boto3.client("ecs", endpoint_url=os.environ.get("LOCAL_ECS_API_ENDPOINT"))
+    task = ecs.register_task_definition(**task_defs["fast_success"])
+
+    expected_project_names = []
+    for _ in range(3):
+        response = ecs.run_task(
+            taskDefinition=task["taskDefinition"]["taskDefinitionArn"],
+        )
+        log.debug("Response:")
+        log.debug(pformat(response))
+
+        assert len(response["failures"]) == 0
+
+        expected_project_names.append(
+            DOCKER_PROJECT_PREFIX + response["tasks"][0]["taskArn"].split("/")[-1]
+        )
+
+    all_project_names = [proj.name for proj in docker.compose.ls(all=True)]
+    log.debug("All docker project names:")
+    log.debug(pformat(all_project_names))
+
+    log.info("Assert that a separate docker project is created for each RunTask call")
+    for name in expected_project_names:
+        assert name in all_project_names
 
 
 @pytest.mark.usefixtures("aws_credentials")
