@@ -25,6 +25,7 @@ COMPOSE_DEST = os.environ.get("COMPOSE_DEST", "/tmp")
 EXTERNAL_NETWORKS = [
     net for net in os.environ.get("ECS_EXTERNAL_NETWORKS", "").split(",") if net != ""
 ]
+DOCKER_PROJECT_PREFIX = "local-ecs-task-"
 
 
 def random_ip(network):
@@ -55,7 +56,7 @@ class DockerTask:
         )
 
         self.docker = DockerClient(
-            compose_project_name=self.task_name,
+            compose_project_name=DOCKER_PROJECT_PREFIX + self.id,
             compose_project_directory=self.compose_dir,
         )
 

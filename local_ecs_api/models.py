@@ -556,10 +556,11 @@ class ECSBackend:
             task.up(
                 kwargs["count"], kwargs.get("overrides", {}).get("executionRoleArn")
             )
-        except DockerException as e:
-            log.debug(f"Exit code {e.return_code} while running {e.docker_command}")
-            log.error(e, exc_info=True)
-            task.run_exception = e
+        except DockerException as err:
+            log.debug(f"Exit code {err.return_code} while running {err.docker_command}")
+            log.error(err, exc_info=True)
+
+            task.run_exception = err
             task.stopped_at = datetime.timestamp(datetime.now())
             task.stopping_at = datetime.timestamp(datetime.now())
             task.execution_stopped_at = datetime.timestamp(datetime.now())
