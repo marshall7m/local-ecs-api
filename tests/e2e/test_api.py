@@ -2,6 +2,8 @@ import os
 import logging
 import re
 from pprint import pformat
+import json
+import uuid
 
 import pytest
 import boto3
@@ -125,6 +127,47 @@ def test_run_task_success():
     if os.environ.get("ECS_AWS_CREDS_VOLUME_NAME"):
         log.info("Assert AWS creds volume exists after RunTask call")
         assert docker.volume.exists(os.environ["ECS_AWS_CREDS_VOLUME_NAME"]) is True
+
+
+@pytest.fixture
+def mock_task_role_arn():
+    iam = boto3.client("iam", endpoint_url="http://moto:5000")
+    res = iam.create_role(
+        RoleName="task-role-" + str(uuid.uuid4()),
+        AssumeRolePolicyDocument=json.dumps(
+            {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": "sts:AssumeRole",
+                        "Principal": {"AWS": "123456789012"},
+                    }
+                ],
+            }
+        ),
+    )
+
+    yield res["Role"]["Arn"]
+
+    iam.delete_role(RoleName=res["Role"]["RoleName"])
+
+
+@pytest.mark.usefixtures("aws_credentials")
+def test_run_task_aws_call(mock_task_role_arn):
+    task_def = task_defs["aws_call"].copy()
+    task_def["taskRoleArn"] = mock_task_role_arn
+
+    ecs = boto3.client("ecs", endpoint_url=os.environ.get("LOCAL_ECS_API_ENDPOINT"))
+    task = ecs.register_task_definition(**task_def)
+
+    response = ecs.run_task(
+        taskDefinition=task["taskDefinition"]["taskDefinitionArn"],
+    )
+    log.debug("Response:")
+    log.debug(pformat(response))
+
+    assert 0
 
 
 @pytest.mark.usefixtures("aws_credentials")

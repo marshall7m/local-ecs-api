@@ -64,4 +64,23 @@ task_defs = {
         "family": "invalid_img",
         "taskRoleArn": "arn:aws:iam::12345679012:role/mock-task",
     },
+    "aws_call": {
+        "containerDefinitions": [
+            {
+                "name": "aws_call",
+                "command": [
+                    "sts",
+                    "get-caller-identity",
+                    "--endpoint-url",
+                    "http://moto:5000",
+                ],
+                "cpu": 1,
+                "essential": True,
+                "image": "amazon/aws-cli:latest",
+                "memory": 10,
+                "environment": [{"name": "AWS_DEFAULT_REGION", "value": "us-west-2"}],
+            },
+        ],
+        "family": "aws_call",
+    },
 }
