@@ -9,6 +9,7 @@ networks:
         gateway: 169.254.170.1
 services:
   ecs-local-endpoints:
+    container_name: ecs-endpoint
     image: amazon/amazon-ecs-local-container-endpoints
     volumes:
     - /var/run/docker.sock:/var/run/docker.sock
@@ -21,6 +22,7 @@ services:
 
     - AWS_ACCESS_KEY_ID=${ECS_ENDPOINT_AWS_ACCESS_KEY_ID}
     - AWS_REGION=${ECS_ENDPOINT_AWS_REGION}
+    - AWS_DEFAULT_REGION=${ECS_ENDPOINT_AWS_REGION}
     - AWS_SECRET_ACCESS_KEY=${ECS_ENDPOINT_AWS_SECRET_ACCESS_KEY}
     networks:
       ecs-local-network:
