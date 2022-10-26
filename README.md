@@ -4,62 +4,75 @@ Docker image that can be used to test ECS tasks on a local machine. The containe
 
 ## Configurable Environment Variables:
 
+All of the following environment variables are optional and are used to configure how the local-ecs-api will interact with external AWS endpoints.
+
 - `ECS_ENDPOINT_URL`: Custom endpoint for ECS requests made within the local API. This endpoint URL will be used for redirecting any ECS requests that are not supported by this API and for retrieving the task definition to be converted into docker compose files.
-- `COMPOSE_DEST`: The directory where task definition conversion to compose files should be stored (defaults to `/tmp`)
+
+- `ECS_ENDPOINT_AWS_REGION`: TODO
+
+To configure how the ECS endpoint will retrieve the credentials to vend to task containers, one group of the following environment variables needs to be set. The permissions associated with the credentials have to be able to assume any IAM role that the container tasks may need.
+
+A:
+   - `ECS_ENDPOINT_AWS_PROFILE`: [AWS profile](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html) name
+   - `ECS_ENDPOINT_AWS_CREDS_HOST_PATH`: Path to the `.aws/` credentials directory within the host machine. 
+   - `ECS_AWS_CREDS_VOLUME_NAME` [OPTIONAL] (default: `ecs-local-aws-creds-volume`): Name of the docker volume that will mount the `ECS_ENDPOINT_AWS_CREDS_HOST_PATH` path to the ECS endpoint container 
+
+B:
+   - `ECS_ENDPOINT_AWS_ACCESS_KEY_ID`: AWS access key
+   - `ECS_ENDPOINT_AWS_SECRET_ACCESS_KEY`: AWS secret access key
+
+
+- `COMPOSE_DEST` (default: `/tmp`): The directory where task definition conversion to compose files should be stored
 - `IAM_ENDPOINT`: Custom IAM endpoint the local ECS endpoint container will use for retrieving task AWS credentials
 - `STS_ENDPOINT`: Custom STS endpoint used for:
    -  Retrieving AWS execution role credentials within local-ecs-api container
-   -  Retrieving AWS task credentials within local ECS endpoint container
+   -  Retrieving AWS task credentials within the local ECS endpoint container
 - `SECRET_MANAGER_ENDPOINT_URL`: Custom Secret Manager endpoint used to retrieve secrets specified within the task definition to load into containers
 - `SSM_ENDPOINT_URL`: Custom Systems Manager endpoint used to retrieve secrets specified within the task definition to load into containers
-- `AWS_ACCESS_KEY_ID`: AWS access key used for assuming task execution role and getting task definition
-- `AWS_SECRET_ACCESS_KEY`: AWS secret access key used for assuming task execution role and getting task definition
 
+The local-ecs-api needs AWS permissions to fulfill RunTask API calls. See the Credentials Requirements section for more details. The credentials can be passed via:
+
+A:
+   - `AWS_ACCESS_KEY_ID`: AWS access key used for assuming task execution role and getting task definition
+   - `AWS_SECRET_ACCESS_KEY`: AWS secret access key used for assuming task execution role and getting task definition
+B:
+   - `AWS_PROFILE`: [AWS profile](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html) name
 
 ## Credentials Requirements
 
-The local-ecs-api container somewhat simulates the ECS container agent used for running ECS tasks. This means that the container needs the appropriate AWS credentials to assume any ECS task execution roles that are given. The AWS credentials can be passed to the container via:
+The local-ecs-api container also simulates the ECS container agent used for running ECS tasks. This means that the container needs the appropriate AWS credentials to assume any ECS task execution roles that are given. In addition, the credentials need the following permissions specifically for RunTask API calls:
 
-1. Environment variables
-
-`docker-compose.yml`
 ```
-version: '3.4'
-services:
-  local-ecs-api:
-    image: local-ecs-api:latest
-    environment:
-    - AWS_ACCESS_KEY_ID
-    - AWS_SECRET_ACCESS_KEY
-```
-
-2. AWS profile
-
-`docker-compose.yml`
-```
-version: '3.4'
-services:
-  local-ecs-api:
-    image: local-ecs-api:latest
-    environment:
-      - AWS_PROFILE=${AWS_PROFILE}
-    volumes:
-      - ~/.aws/:/root/.aws:ro
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": "ecs:DescribeTaskDefinition",
+            "Resource": "*"
+        }
+    ]
+}
 ```
 
 ## Example Usage
+
+For running in a local environment using other local services (e.g. LocalStack or Moto container):
 
 `docker-compose.yml`:
 
 ```
 version: '3.4'
 services:
-  app:
-    image: app:latest
+  moto:
+    image: motoserver/moto:4.0.1
+    ports:
+    - 5000:5000
     networks:
-      local-ecs:
+      local-ecs-api-tests:
   local-ecs-api:
-    image: local-ecs-api:latest
+    build: ../../
+    image: marshall7m/local-ecs-api:latest
     restart: always
     volumes:
     - /usr/bin/docker:/usr/bin/docker
@@ -68,20 +81,30 @@ services:
     - 8000:8000
     environment:
     - COMPOSE_DEST
-    - IAM_ENDPOINT
-    - STS_ENDPOINT
-    - ECS_ENDPOINT_URL
-    - SECRET_MANAGER_ENDPOINT_URL
-    - SSM_ENDPOINT_URL
-    - AWS_ACCESS_KEY_ID
-    - AWS_SECRET_ACCESS_KEY
-    - AWS_DEFAULT_REGION
+
+    - IAM_ENDPOINT=${MOTO_ENDPOINT_URL}
+    - STS_ENDPOINT=${MOTO_ENDPOINT_URL}
+    - ECS_ENDPOINT_URL=${MOTO_ENDPOINT_URL}
+    - SSM_ENDPOINT_URL=${MOTO_ENDPOINT_URL}
+    - SECRET_MANAGER_ENDPOINT_URL=${MOTO_ENDPOINT_URL}
+
+    - AWS_ACCESS_KEY_ID=mock
+    - AWS_SECRET_ACCESS_KEY=mock
+    - AWS_DEFAULT_REGION=us-east-1
+
+    - ECS_AWS_CREDS_VOLUME_NAME
+    - ECS_ENDPOINT_AWS_PROFILE
+    - ECS_ENDPOINT_AWS_CREDS_HOST_PATH
+
+    - ECS_ENDPOINT_AWS_ACCESS_KEY_ID
+    - ECS_ENDPOINT_AWS_SECRET_ACCESS_KEY
+
     networks:
-      local-ecs:
+      local-ecs-api-tests:
 
 networks:
-  local-ecs:
-    name: local-ecs
+  local-ecs-api-tests:
+    name: ${NETWORK_NAME}
     driver: bridge
     ipam:
       driver: default
@@ -235,7 +258,7 @@ The following ECS responses will contain attributes that reference the local doc
 (same as `RunTask`)
 
 `ListTasks`
-
+# TODO
 
 
 ## TODO
@@ -272,31 +295,11 @@ The following ECS responses will contain attributes that reference the local doc
 - add save() to RunTask function for saving to .pickle file
 
 
-
-- container needs to have the following permission:
-   ecs:describetasks on all resources
-   - create predefined ECS local endpoint docker compose files for
-      - AWS env creds
-      - AWS profile
-   - create ENV var to specify shared volume mount to add user-defined override compose files for endpoint or tasks
-
 - create async background task to monitor when ecs task containers stop. if container stopped, gather container metadata and then remove container? ensures that subsequent RunTask calls will not use the stopped container but an entirely new one
 
-see if coupling local endpoint servicce to task will cause any issue
-if not have it where user can define compose override files that contain the proper filename suffix
-then they can override the task's local ecs endpoint config with the proper AWS creds to retreive creds
-for tasks
 
-create env vars for AWS cred mount
+## Notes on ECS_CONTAINER_METADATA_URI
 
-- ECS_ENDPOINT_AWS_PROFILE
-- ECS_ENDPOINT_AWS_CREDS_HOST_PATH
+Within a remote AWS environment, the ECS container agent provides an [endpoint](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-metadata-endpoint.html) for retrieving task metadata and Docker stats. The `amazon/amazon-ecs-local-container-endpoints` docker image used within this project simulates the endpoint locally. The local endpoint provides the [V3](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-metadata-endpoint-v3.html) response metadata exclusively. 
 
-- ECS_ENDPOINT_AWS_ACCESS_KEY_ID
-- ECS_ENDPOINT_AWS_REGION
-- ECS_ENDPOINT_AWS_SECRET_ACCESS_KEY
-
-1. if above env vars are present in local-ecs-api, create independent docker volume for mounting AWS creds from host
-2. then use pre-defined local-ecs-endpoint compose file that has the external mount defined
-
-1. or use aws environment variable passed
+It would seem like using the endpoint response would be ideal for crafting the RunTask and DescribeTask API response. Unfortunately, the endpoint does not update the metadata to reflect the current status of the task containers. For example, if a task container is running, the endpoint will correctly return a `KnownStatus` attribute of `RUNNING`. If the endpoint was hit again after the container task was finished, the response will still return a `KnownStatus` attribute of `RUNNING` when the expected value is `STOPPED`. To work around this, the local-ecs-api container will run the appropriate docker CLI command to extract the needed values for the ECS response. 
