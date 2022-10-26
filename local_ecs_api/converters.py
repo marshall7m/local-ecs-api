@@ -7,6 +7,7 @@ import json
 from tempfile import NamedTemporaryFile
 import shlex
 from pprint import pformat
+import re
 
 import ipaddress
 import boto3
@@ -14,6 +15,7 @@ import random
 import yaml
 import struct
 from python_on_whales import DockerClient
+from python_on_whales.exceptions import DockerException
 
 log = logging.getLogger("local-ecs-api")
 log.setLevel(logging.DEBUG)
@@ -82,10 +84,11 @@ class DockerTask:
         log.info("Generating docker compose files")
         os.makedirs(self.compose_dir, exist_ok=True)
 
-        self.generate_local_task_compose_file(
+        task_path = self.generate_local_task_compose_file(
             self.task_def,
             os.path.join(self.compose_dir, "docker-compose.ecs-local.task.yml"),
         )
+        self.docker.client_config.compose_files.append(task_path)
 
         self.generate_local_compose_network_file(
             os.path.join(
@@ -186,17 +189,32 @@ class DockerTask:
                 .services["ecs-local-endpoints"]
                 .container_name
             )
-            self.docker_ecs_endpoint.network.connect(network, endpoint_container_name)
+            try:
+                self.docker_ecs_endpoint.network.connect(
+                    network, endpoint_container_name
+                )
+            except DockerException as err:
+                if re.search(r"already exists in network", err.stderr):
+                    log.debug("Container is already associated")
+                else:
+                    raise err
 
-    def up(self, count: int, override_execution_role_arn=None):
+    def up(self, count: int, overrides=None):
         log.info("Running ECS endpoint service")
         self.ecs_endpoint_up()
 
+        self.create_docker_compose_stack(overrides)
+        log.debug("Compose files:")
+        log.debug(pformat(self.docker.client_config.compose_files))
+
         _environ = os.environ.copy()
 
-        execution_role = override_execution_role_arn or self.task_def.get(
-            "executionRoleArn"
-        )
+        if overrides:
+            execution_role = overrides.get("executionRoleArn") or self.task_def.get(
+                "executionRoleArn"
+            )
+        else:
+            execution_role = self.task_def.get("executionRoleArn")
 
         try:
             log.info("Assuming task execution role")
@@ -219,7 +237,7 @@ class DockerTask:
 
     def get_network_assigned_ips(self, network_name):
         return [
-            ipaddress.IPv4Network(attr["IPv4Address"])[0]
+            attr.ipv4_address
             for attr in self.docker.network.inspect(network_name).containers.values()
         ]
 
@@ -230,30 +248,32 @@ class DockerTask:
 
         config = self.docker.compose.config()
         assigned = self.get_network_assigned_ips(ECS_NETWORK_NAME)
-        for _ in range(len(config.services)):
+
+        service_networks = {}
+        external_service_networks = {}
+        networks = {ECS_NETWORK_NAME: {"external": True}}
+
+        for network in EXTERNAL_NETWORKS:
+            networks[network] = {"external": True}
+            external_service_networks[network] = {}
+
+        for service in config.services:
             rand_ip = None
             while rand_ip is None or rand_ip in assigned:
                 rand_ip = random_ip(local_subnet)
             assigned.append(rand_ip)
 
-        networks = {ECS_NETWORK_NAME: {"external": True}}
-        service_networks = {}
-        for network in EXTERNAL_NETWORKS:
-            networks[network] = {"external": True}
-            service_networks[network] = {}
+            service_networks[service] = {
+                "networks": {
+                    **{ECS_NETWORK_NAME: {"ipv4_address": rand_ip}},
+                    **external_service_networks,
+                }
+            }
 
         file_content = {
             "version": "3.4",
             "networks": networks,
-            "services": {
-                service: {
-                    "networks": {
-                        **service_networks,
-                        **{ECS_NETWORK_NAME: {"ipv4_address": assigned[i]}},
-                    }
-                }
-                for i, service in enumerate(config.services)
-            },
+            "services": service_networks,
         }
 
         log.debug(f"Writing to path:\n{pformat(file_content)}")
