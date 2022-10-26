@@ -1,6 +1,5 @@
 import os
 import re
-import json
 import uuid
 from datetime import datetime
 import logging
@@ -9,7 +8,6 @@ import pickle
 from functools import cached_property
 
 from pydantic import BaseModel
-from python_on_whales.utils import run
 from python_on_whales.exceptions import DockerException
 import boto3
 
@@ -338,28 +336,12 @@ class RunTaskBackend(DockerTask):
         if self._last_status:
             return self._last_status
 
-        full_cmd = self.docker.docker_compose_cmd + [
-            "ls",
-            "--format",
-            "json",
-            "--all",
-        ]
-        for proj in json.loads(run(full_cmd)):
-            if proj["Name"] == self.docker.compose.client_config.compose_project_name:
-                # remove status count (e.g. running(1) -> running)
-                status = re.sub(r"\([0-9]+\)$", "", proj["Status"])
-                if status == "running":
+        for proj in self.docker.compose.ls():
+            if proj.name == self.docker.compose.client_config.compose_project_name:
+                if proj.status == "running":
                     return "RUNNING"
-                elif status == "exited":
+                elif proj.status == "exited":
                     return "STOPPED"
-        # uncomment and replace above with once PR is merged: https://github.com/gabrieldemarmiesse/python-on-whales/pull/368
-        # for proj in self.docker.compose.ls():
-        #     if proj.name == self.compose_project_name:
-        #         # remove status count (e.g. running(1) -> running)
-        #         if proj.status == "running":
-        #             return "RUNNING"
-        #         elif proj.status == "exited":
-        #             return "STOPPED"
 
     @last_status.setter
     def last_status(self, value):

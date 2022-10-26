@@ -19,7 +19,7 @@ dependencies = [
     "pydantic==1.10.2",
     "fastapi==0.85.0",
     "uvicorn==0.18.3",
-    "python-on-whales==0.52.0",
+    "python-on-whales==0.53.0",
     "pyyaml==6.0",
     "boto3==1.24.78"
 ]
