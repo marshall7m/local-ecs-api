@@ -64,8 +64,13 @@ def local_api(request, compose_env_vars):
 
     yield docker
 
-    client.compose.stop()
+    containers = list(client.network.inspect(ECS_NETWORK_NAME).containers.keys())
+    log.debug(pformat(containers))
 
+    client.container.remove(containers, force=True, volumes=True)
+    client.network.remove(ECS_NETWORK_NAME)
+
+    client.compose.stop()
     if not getattr(request.node.obj, "any_failures", False):
         client.compose.down()
 
@@ -76,12 +81,6 @@ def local_api(request, compose_env_vars):
             log.debug(
                 "Volume does not exist: %s", os.environ.get("ECS_AWS_CREDS_VOLUME_NAME")
             )
-
-    containers = list(client.network.inspect(ECS_NETWORK_NAME).containers.keys())
-    log.debug(pformat(containers))
-
-    client.container.remove(containers, force=True, volumes=True)
-    client.network.remove(ECS_NETWORK_NAME)
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -170,8 +169,6 @@ def test_run_task_aws_call(mock_task_role_arn):
     )
     log.debug("Response:")
     log.debug(pformat(response))
-
-    assert 0
 
 
 @pytest.mark.usefixtures("aws_credentials")
