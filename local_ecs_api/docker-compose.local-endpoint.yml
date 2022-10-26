@@ -1,6 +1,7 @@
 version: '3.4'
 networks:
   ecs-local-network:
+    # has to be the name below as the ecs-cli automatically uses this name (TODO: need to confirm)
     name: ecs-local-network
     driver: bridge
     ipam:
@@ -26,4 +27,5 @@ services:
     - AWS_SECRET_ACCESS_KEY=${ECS_ENDPOINT_AWS_SECRET_ACCESS_KEY}
     networks:
       ecs-local-network:
+        # special IP address AWS clients automatically use to look up credential
         ipv4_address: 169.254.170.2

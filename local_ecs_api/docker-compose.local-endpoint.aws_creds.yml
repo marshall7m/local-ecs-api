@@ -6,6 +6,7 @@ services:
     volumes:
     - ecs-local-aws-creds:/home/.aws
 
+# contains AWS creds needed for ECS endpoint to vend credentials to task containers
 volumes:
   ecs-local-aws-creds:
     name: ${ECS_AWS_CREDS_VOLUME_NAME}

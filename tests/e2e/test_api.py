@@ -19,6 +19,7 @@ log.setLevel(logging.DEBUG)
 FILE_DIR = os.path.dirname(__file__)
 
 
+# test the potential ways users may pass AWS credentials to the local-ecs-api container
 @pytest.fixture(
     scope="module",
     autouse=True,
@@ -28,12 +29,17 @@ FILE_DIR = os.path.dirname(__file__)
     ],
     ids=["aws-creds-env-vars", "aws-creds-volume"],
 )
-def local_api(request):
+def local_api(request) -> DockerClient:
+    """Creates local-ecs-api compose project"""
     if os.environ.get("IS_DEV_CONTAINER") and not os.environ.get("AWS_CREDS_HOST_PATH"):
+        # reason being that the ~/.aws host path will differ between local machines and
+        # setting the host path to the dev container's absolute path results in a mounting
+        # permission error (atleast for MacOS)
         pytest.fail(
             "AWS_CREDS_HOST_PATH needs to be explicitly set if running tests within docker container"
         )
 
+    # docker network to host local-ecs-api compose project
     os.environ["NETWORK_NAME"] = "local-ecs-api-tests"
 
     compose_files = [os.path.join(FILE_DIR, "docker-compose.yml")] + request.param
@@ -43,6 +49,7 @@ def local_api(request):
 
     yield docker
 
+    log.debug("Disconnecting containers from network: %s", ECS_NETWORK_NAME)
     containers = list(client.network.inspect(ECS_NETWORK_NAME).containers.keys())
     log.debug(pformat(containers))
 
@@ -50,12 +57,19 @@ def local_api(request):
     client.network.remove(ECS_NETWORK_NAME)
 
     client.compose.stop()
+    # keeps local-ecs-api compose project containers to access
+    # docker logs for debugging if any test(s) failed
     if not getattr(request.node.obj, "any_failures", False):
         client.compose.down(volumes=True)
+        # TODO: create teardown logic to remove ONLY task containers
+        # that are dangling
+        # maybe use a filter on docker label?
+        # or use DOCKER_PROJECT_PREFIX to filter out unrelated projects
 
 
 @pytest.fixture(scope="module", autouse=True)
-def connect_tests_to_api(local_api):
+def connect_tests_to_api(local_api) -> None:
+    """Connects dev container (if used) to docker network associated with ECS tasks"""
     # CI env var will be set if running in GitHub Action job
     if not os.environ.get("CI"):
         os.environ["LOCAL_ECS_API_ENDPOINT"] = "http://local-ecs-api:8000"
@@ -90,6 +104,7 @@ def test_redirect_supported():
 
 @pytest.mark.usefixtures("aws_credentials")
 def test_run_task():
+    """Ensures RunTask endpoint is successful from the AWS SDK"""
     ecs = boto3.client("ecs", endpoint_url=os.environ.get("LOCAL_ECS_API_ENDPOINT"))
     task = ecs.register_task_definition(**task_defs["fast_success"])
 
@@ -101,7 +116,11 @@ def test_run_task():
 
 
 @pytest.fixture
-def mock_task_role_arn():
+def mock_task_role_arn() -> str:
+    """
+    Creates a mock ECS task role that the ECS endpoint will use to vend
+    credentials to task containers
+    """
     iam = boto3.client("iam", endpoint_url="http://moto:5000")
     res = iam.create_role(
         RoleName="task-role-" + str(uuid.uuid4()),
@@ -126,6 +145,7 @@ def mock_task_role_arn():
 
 @pytest.mark.usefixtures("aws_credentials")
 def test_run_task_aws_call(mock_task_role_arn):
+    """Ensures task container is given AWS credentials to perform it's operation"""
     task_def = task_defs["aws_call"].copy()
     task_def["taskRoleArn"] = mock_task_role_arn
 
@@ -137,9 +157,15 @@ def test_run_task_aws_call(mock_task_role_arn):
     log.debug("Response:")
     log.debug(pformat(response))
 
+    # TODO: create assertion to check if task container exited without error
+
 
 @pytest.mark.usefixtures("aws_credentials")
 def test_multiple_run_task_calls(mock_task_role_arn):
+    """
+    Ensures subsequent RunTask calls don't fail and that a new docker project
+    is created for each call
+    """
     ecs = boto3.client("ecs", endpoint_url=os.environ.get("LOCAL_ECS_API_ENDPOINT"))
     task = ecs.register_task_definition(**task_defs["fast_success"])
 
@@ -168,6 +194,7 @@ def test_multiple_run_task_calls(mock_task_role_arn):
 
 @pytest.mark.usefixtures("aws_credentials")
 def test_describe_tasks():
+    """Ensures DescribeTasks endpoint is successful from the AWS SDK"""
     ecs = boto3.client("ecs", endpoint_url=os.environ.get("LOCAL_ECS_API_ENDPOINT"))
     response = ecs.describe_tasks(tasks=[])
     log.debug("Response:")
@@ -176,6 +203,7 @@ def test_describe_tasks():
 
 @pytest.mark.usefixtures("aws_credentials")
 def test_list_tasks():
+    """Ensures LisTasks endpoint is successful from the AWS SDK"""
     ecs = boto3.client("ecs", endpoint_url=os.environ.get("LOCAL_ECS_API_ENDPOINT"))
     response = ecs.list_tasks()
     log.debug("Response:")

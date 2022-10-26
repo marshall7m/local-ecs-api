@@ -29,7 +29,7 @@ BACKEND_PATH = os.path.join(os.path.dirname(__file__), ".backend.pickle")
 
 app = FastAPI()
 
-
+# TODO: see if needed
 try:
     with open(BACKEND_PATH, "rb") as f:
         backend = pickle.load(f)
@@ -39,6 +39,7 @@ except FileNotFoundError:
 
 @app.middleware("http")
 async def add_resource_path(request: Request, call_next):
+    """Parses the endpoint path from the request header and replaces the original resource path"""
     request.scope["path"] = "/" + request.headers.get("x-amz-target", "").split(".")[-1]
     response = await call_next(request)
     return response
@@ -46,6 +47,7 @@ async def add_resource_path(request: Request, call_next):
 
 @app.post("/ListTasks", response_model=ListTasksResponse)
 async def list_tasks(request: Request) -> ListTasksResponse:
+    """Retreives the local docker task ARNs that meet the request filters"""
     request_json = await request.json()
     request = ListTasksRequest(**request_json)
 
@@ -64,6 +66,7 @@ async def list_tasks(request: Request) -> ListTasksResponse:
 
 @app.post("/DescribeTasks", response_model=DescribeTasksResponse)
 async def describe_tasks(request: Request) -> DescribeTasksResponse:
+    """Retreives the local docker tasks for the specified Task ARNs"""
     request_json = await request.json()
     request = DescribeTasksRequest(**request_json)
 
@@ -73,6 +76,7 @@ async def describe_tasks(request: Request) -> DescribeTasksResponse:
 
 @app.post("/RunTask", response_model=RunTaskResponse)
 async def run_task(request: Request) -> RunTaskResponse:
+    """Runs workflow to execute ECS task within local docker environment"""
     request_json = await request.json()
     request = RunTaskRequest(**request_json)
 
@@ -84,7 +88,7 @@ async def run_task(request: Request) -> RunTaskResponse:
 async def redirect(request: Request, full_path: str):
     """Redirect request to endpoint specified witin ECS_ENDPOINT_URL environment variable"""
     redirect_url = os.environ.get("ECS_ENDPOINT_URL", "https://ecs.amazonaws.com")
-    log.info(f"Redirecting path: {request.scope['path']} to: {redirect_url}")
+    log.info("Redirecting path: %s to: %s", request.scope["path"], redirect_url)
 
     # AWS service APIs require resource path to be "/"
     request.scope["path"] = "/"

@@ -326,13 +326,13 @@ class RunTaskBackend(DockerTask):
         return attachments
 
     @property
-    def service_names(self):
+    def service_names(self) -> List[str]:
+        """Returns list of docker service names associated with ECS task defintition"""
         return [c.name for c in self.docker.compose.ps()]
 
     @property
     def last_status(self) -> str:
         """Returns Docker compose project status translated to lastStatus response attribute"""
-
         if self._last_status:
             return self._last_status
 
@@ -351,8 +351,8 @@ class RunTaskBackend(DockerTask):
     def task_health_status(self) -> str:
         """
         Returns the health status of first container that reports a status other
-        than `healthy` or returns a health status of `healthy` if all containers
-        have a health status of healthy
+        than "healthy" or returns a health status of "healthy" if all containers
+        have a health status of "healthy"
         """
         for c in self.docker.compose.ps():
             if c.name in self.essential_containers:
@@ -432,17 +432,19 @@ class RunTaskBackend(DockerTask):
         return response
 
     @cached_property
-    def cpu(self):
+    def cpu(self) -> str:
+        """Returns CPU override value for task"""
         return self.request.get("overrides", {}).get("cpu", self.task_def.get("cpu"))
 
     @cached_property
-    def memory(self):
+    def memory(self) -> str:
+        """Returns memory override value for task"""
         return self.request.get("overrides", {}).get(
             "memory", self.task_def.get("memory")
         )
 
     def is_failure(self) -> bool:
-        """Returns True if task contains any containers that have failed and True otherwise"""
+        """Returns True if task contains any containers that have failed and False otherwise"""
         for c_id in self.docker.compose.ps():
             if self.docker.container.inspect(c_id).state.exit_code != 0:
                 return True
@@ -483,14 +485,15 @@ class ECSBackend:
         """
         response = {"tasks": [], "failures": []}
 
-        for t in tasks:
+        for task_id in tasks:
             match = re.match(
                 "^arn:aws:ecs:(?P<region>[^:]+):(?P<account_id>[^:]+):(?P<service>[^:]+)/(?P<id>.*)$",
-                t,
+                task_id,
             )
             if match:
-                t = match.groupdict()["id"]
-            task = self.tasks[t]
+                task_id = match.groupdict()["id"]
+
+            task = self.tasks[task_id]
             if task.is_failure():
                 response["failures"].append(
                     Failures(
@@ -501,6 +504,7 @@ class ECSBackend:
                     )
                 )
                 continue
+
             response["tasks"].append(
                 Tasks(
                     lastStatus=task.last_status,
@@ -557,7 +561,9 @@ class ECSBackend:
                 kwargs["count"], kwargs.get("overrides", {}).get("executionRoleArn")
             )
         except DockerException as err:
-            log.debug(f"Exit code {err.return_code} while running {err.docker_command}")
+            log.debug(
+                "Exit code: %i while running: %s", err.return_code, err.docker_command
+            )
             log.error(err, exc_info=True)
 
             task.run_exception = err
@@ -581,6 +587,19 @@ class ECSBackend:
         container_instance: Optional[str] = None,
         max_results: Optional[int] = None,
     ) -> List[str]:
+        """
+        Returns ECS ListTasks response replaced with local docker compose translated ARNs
+
+        Arguments:
+            cluster: AWS ECS cluster name to filter by
+            family: AWS ECS task defintion family to filter by
+            launch_type: AWS ECS launch type to filter by
+            service_name: Name of the ECS service to filter by
+            desired_status: Task desired status to filter by
+            started_by: `startedBy` value used in RunTask API call to filter by
+            container_instance: AWS ECS container instance ID or ARN to filter by
+            max_results: Maximum number of task ARNs to return
+        """
         arns = []
         for task in self.tasks.values():
             if cluster is not None and task.request["cluster"] != cluster:
