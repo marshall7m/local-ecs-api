@@ -568,7 +568,6 @@ class ECSBackend:
         # so that the task execution role doesn't need extra permissions
         task_def = ecs.describe_task_definition(taskDefinition=kwargs["taskDefinition"])
         task = RunTaskBackend(task_def, **kwargs)
-        task.create_docker_compose_stack(kwargs.get("overrides"))
         self.created_at = datetime.timestamp(datetime.now())
 
         try:
@@ -577,6 +576,7 @@ class ECSBackend:
             )
         except DockerException as e:
             log.debug(f"Exit code {e.return_code} while running {e.docker_command}")
+            log.error(e, exc_info=True)
             task.run_exception = e
             task.stopped_at = datetime.timestamp(datetime.now())
             task.stopping_at = datetime.timestamp(datetime.now())
