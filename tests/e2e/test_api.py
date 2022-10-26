@@ -25,13 +25,13 @@ FILE_DIR = os.path.dirname(__file__)
     params=[
         {
             "ECS_ENDPOINT_AWS_ACCESS_KEY_ID": "mock-aws-creds",
-            "ECS_ENDPOINT_AWS_REGION": "us-west-2",
             "ECS_ENDPOINT_AWS_SECRET_ACCESS_KEY": "mock-aws-creds",
         },
         {
-            "ECS_ENDPOINT_AWS_PROFILE": "test",
-            "ECS_ENDPOINT_AWS_CREDS_HOST_PATH": os.path.join(
-                os.path.dirname(__file__), "mock_aws_creds"
+            "ECS_ENDPOINT_AWS_PROFILE": "mock",
+            "AWS_CREDS_HOST_PATH": os.environ.get(
+                "AWS_CREDS_HOST_PATH",
+                os.path.join(os.path.dirname(__file__), "mock_aws_creds"),
             ),
             "ECS_AWS_CREDS_VOLUME_NAME": "test-ecs-endpoint-aws-creds",
         },
@@ -54,7 +54,11 @@ def local_api(request, compose_env_vars):
 
     os.environ["NETWORK_NAME"] = "local-ecs-api-tests"
 
-    client = DockerClient(compose_files=[os.path.join(FILE_DIR, "docker-compose.yml")])
+    compose_files = [os.path.join(FILE_DIR, "docker-compose.yml")]
+    if os.environ.get("ECS_AWS_CREDS_VOLUME_NAME"):
+        compose_files.append(os.path.join(FILE_DIR, "docker-compose.aws-creds.yml"))
+
+    client = DockerClient(compose_files=compose_files)
 
     client.compose.up(build=True, detach=True, quiet=True)
 
@@ -115,7 +119,7 @@ def test_redirect_supported():
 
 
 @pytest.mark.usefixtures("aws_credentials")
-def test_run_task_success():
+def test_run_task():
     ecs = boto3.client("ecs", endpoint_url=os.environ.get("LOCAL_ECS_API_ENDPOINT"))
     task = ecs.register_task_definition(**task_defs["fast_success"])
     response = ecs.run_task(
