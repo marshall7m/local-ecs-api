@@ -2,6 +2,9 @@ version: '3.4'
 
 services:
   local-ecs-api:
+    environment:
+    - ECS_ENDPOINT_AWS_PROFILE=mock
+    - ECS_AWS_CREDS_VOLUME_NAME=${ECS_AWS_CREDS_VOLUME_NAME}
     volumes:
     - ecs-local-aws-creds:/root/.aws
 

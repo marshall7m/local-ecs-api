@@ -1,0 +1,5 @@
+services:
+  local-ecs-api:
+    environment:
+    - ECS_ENDPOINT_AWS_ACCESS_KEY_ID=mock-aws-creds
+    - ECS_ENDPOINT_AWS_SECRET_ACCESS_KEY=mock-aws-creds

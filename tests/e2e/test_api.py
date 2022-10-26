@@ -8,7 +8,7 @@ import uuid
 import pytest
 import boto3
 from python_on_whales import DockerClient, docker
-from python_on_whales.exceptions import DockerException, NoSuchVolume
+from python_on_whales.exceptions import DockerException
 
 from local_ecs_api.converters import ECS_NETWORK_NAME
 from tests.data import task_defs
@@ -23,41 +23,20 @@ FILE_DIR = os.path.dirname(__file__)
     scope="module",
     autouse=True,
     params=[
-        {
-            "ECS_ENDPOINT_AWS_ACCESS_KEY_ID": "mock-aws-creds",
-            "ECS_ENDPOINT_AWS_SECRET_ACCESS_KEY": "mock-aws-creds",
-        },
-        {
-            "ECS_ENDPOINT_AWS_PROFILE": "mock",
-            "AWS_CREDS_HOST_PATH": os.environ.get(
-                "AWS_CREDS_HOST_PATH",
-                os.path.join(os.path.dirname(__file__), "mock_aws_creds"),
-            ),
-            "ECS_AWS_CREDS_VOLUME_NAME": "test-ecs-endpoint-aws-creds",
-        },
+        [os.path.join(FILE_DIR, "docker-compose.creds-env-vars.yml")],
+        [os.path.join(FILE_DIR, "docker-compose.creds-volume.yml")],
     ],
-    ids=["env_var_creds", "volume_creds"],
+    ids=["aws-creds-env-vars", "aws-creds-volume"],
 )
-def compose_env_vars(request):
-    _environ = os.environ.copy()
-    for k, v in request.param.items():
-        os.environ[k] = v
-
-    yield request.param
-
-    os.environ.clear()
-    os.environ.update(_environ)
-
-
-@pytest.fixture(scope="module", autouse=True)
-def local_api(request, compose_env_vars):
+def local_api(request):
+    if os.environ.get("IS_DEV_CONTAINER") and not os.environ.get("AWS_CREDS_HOST_PATH"):
+        pytest.fail(
+            "AWS_CREDS_HOST_PATH needs to be explicitly set if running tests within docker container"
+        )
 
     os.environ["NETWORK_NAME"] = "local-ecs-api-tests"
 
-    compose_files = [os.path.join(FILE_DIR, "docker-compose.yml")]
-    if os.environ.get("ECS_AWS_CREDS_VOLUME_NAME"):
-        compose_files.append(os.path.join(FILE_DIR, "docker-compose.aws-creds.yml"))
-
+    compose_files = [os.path.join(FILE_DIR, "docker-compose.yml")] + request.param
     client = DockerClient(compose_files=compose_files)
 
     client.compose.up(build=True, detach=True, quiet=True)
@@ -72,15 +51,7 @@ def local_api(request, compose_env_vars):
 
     client.compose.stop()
     if not getattr(request.node.obj, "any_failures", False):
-        client.compose.down()
-
-    if os.environ.get("ECS_AWS_CREDS_VOLUME_NAME"):
-        try:
-            client.volume.remove(os.environ.get("ECS_AWS_CREDS_VOLUME_NAME"))
-        except NoSuchVolume:
-            log.debug(
-                "Volume does not exist: %s", os.environ.get("ECS_AWS_CREDS_VOLUME_NAME")
-            )
+        client.compose.down(volumes=True)
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -126,10 +97,6 @@ def test_run_task():
     )
     log.debug("Response:")
     log.debug(pformat(response))
-
-    if os.environ.get("ECS_AWS_CREDS_VOLUME_NAME"):
-        log.info("Assert AWS creds volume exists after RunTask call")
-        assert docker.volume.exists(os.environ["ECS_AWS_CREDS_VOLUME_NAME"]) is True
 
 
 @pytest.fixture
