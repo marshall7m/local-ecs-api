@@ -3,3 +3,7 @@ services:
     environment:
     - ECS_ENDPOINT_AWS_ACCESS_KEY_ID=mock-aws-creds
     - ECS_ENDPOINT_AWS_SECRET_ACCESS_KEY=mock-aws-creds
+
+    - AWS_ACCESS_KEY_ID=mock-aws-creds
+    - AWS_SECRET_ACCESS_KEY=mock-aws-creds
+    - AWS_DEFAULT_REGION=us-west-2
