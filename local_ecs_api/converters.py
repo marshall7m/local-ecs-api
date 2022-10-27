@@ -291,7 +291,7 @@ class DockerTask:
         # get list of IPs already assigned within docker network
         assigned = [
             attr.ipv4_address for attr in network_inspect.containers.values()
-        ].append(ip_config["Gateway"], ip_config["Subnet"].split("/")[0])
+        ].extend([ip_config["Gateway"], ip_config["Subnet"].split("/")[0]])
 
         # compose service network attribute
         service_networks = {}
