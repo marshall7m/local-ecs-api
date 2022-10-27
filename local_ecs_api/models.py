@@ -336,11 +336,11 @@ class RunTaskBackend(DockerTask):
         if self._last_status:
             return self._last_status
 
-        for proj in self.docker.compose.ls():
+        for proj in self.docker.compose.ls(all=True):
             if proj.name == self.docker.compose.client_config.compose_project_name:
                 if proj.status == "running":
                     return "RUNNING"
-                elif proj.status == "exited":
+                if proj.status == "exited":
                     return "STOPPED"
 
     @last_status.setter
