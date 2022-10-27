@@ -38,6 +38,8 @@ def local_api(request) -> DockerClient:
         pytest.fail(
             "AWS_CREDS_HOST_PATH needs to be explicitly set if running tests within docker container"
         )
+    else:
+        os.environ["AWS_CREDS_HOST_PATH"] = os.path.join(FILE_DIR, "mock-aws-creds")
 
     # docker network to host local-ecs-api compose project
     os.environ["NETWORK_NAME"] = "local-ecs-api-tests"
