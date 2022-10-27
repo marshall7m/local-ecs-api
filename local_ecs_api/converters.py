@@ -1,19 +1,19 @@
-from glob import glob
-import os
-import uuid
-import subprocess
-import logging
-import json
-from tempfile import NamedTemporaryFile
-import shlex
-from pprint import pformat
-import re
-
 import ipaddress
-import boto3
+import json
+import logging
+import os
 import random
-import yaml
+import re
+import shlex
 import struct
+import subprocess
+import uuid
+from glob import glob
+from pprint import pformat
+from tempfile import NamedTemporaryFile
+
+import boto3
+import yaml
 from python_on_whales import DockerClient
 from python_on_whales.exceptions import DockerException
 

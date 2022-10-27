@@ -1,22 +1,17 @@
+import logging
+import os
 import pickle
 import sys
-import os
-import logging
 
 import requests
 from fastapi import FastAPI
 from starlette.requests import Request
 from starlette.responses import Response
 
-from local_ecs_api.models import (
-    RunTaskRequest,
-    RunTaskResponse,
-    DescribeTasksRequest,
-    DescribeTasksResponse,
-    ListTasksRequest,
-    ListTasksResponse,
-    ECSBackend,
-)
+from local_ecs_api.models import (DescribeTasksRequest, DescribeTasksResponse,
+                                  ECSBackend, ListTasksRequest,
+                                  ListTasksResponse, RunTaskRequest,
+                                  RunTaskResponse)
 
 log = logging.getLogger("local-ecs-api")
 log.setLevel(logging.DEBUG)

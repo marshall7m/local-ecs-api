@@ -1,11 +1,11 @@
-import uuid
 import logging
+import uuid
 from pprint import pformat
 
+import boto3
 import pytest
 from fastapi.testclient import TestClient
 from moto import mock_ecs, mock_secretsmanager, mock_ssm, mock_sts
-import boto3
 from python_on_whales import docker
 
 from local_ecs_api.main import app

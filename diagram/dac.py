@@ -1,12 +1,12 @@
 from diagrams import Cluster, Diagram
+from diagrams.aws.compute import ElasticContainerService
 from diagrams.aws.management import SystemsManagerParameterStore as ssm
 from diagrams.aws.security import SecretsManager as secret
-from diagrams.programming.framework import Fastapi
-from diagrams.onprem.container import Docker
 from diagrams.onprem.client import User
+from diagrams.onprem.container import Docker
 from diagrams.programming.flowchart import Document
+from diagrams.programming.framework import Fastapi
 from diagrams.programming.language import Python
-from diagrams.aws.compute import ElasticContainerService
 
 node_attr = {"fontsize": "25", "height": "10.6", "fontname": "Times bold"}
 
