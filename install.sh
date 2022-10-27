@@ -7,7 +7,7 @@ run_as="${1}"
 $run_as apt-get -y update
 $run_as apt-get -y install gnupg curl
 
-# ecs-cli
+echo "Installing ecs-cli"
 $run_as curl -s -Lo /usr/local/bin/ecs-cli https://amazon-ecs-cli.s3.amazonaws.com/ecs-cli-linux-amd64-latest
 mkdir /tmp/src-tmp
 
@@ -146,11 +146,12 @@ qX2yy/UX5nSPU492e2CdZ1UhoU0SRFY3bxKHKB7SDbVeav+K5g==
 -----END PGP PUBLIC KEY BLOCK-----
 EOF
 gpg --import /tmp/src-tmp/pub_ecs_cli.txt
+echo "mark 1"
 curl -Lo ecs-cli.asc https://amazon-ecs-cli.s3.amazonaws.com/ecs-cli-linux-amd64-latest.asc
 gpg --verify ecs-cli.asc /usr/local/bin/ecs-cli
 $run_as chmod +x /usr/local/bin/ecs-cli
 
-# docker compose plugin
+echo "Installing docker compose plugin"
 DOCKER_CONFIG="${DOCKER_CONFIG:-$HOME/.docker}"
 mkdir -p "${DOCKER_CONFIG}"/cli-plugins
 curl -s -SL https://github.com/docker/compose/releases/download/v2.3.3/docker-compose-linux-x86_64 -o "${DOCKER_CONFIG}"/cli-plugins/docker-compose
