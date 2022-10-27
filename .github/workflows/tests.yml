@@ -44,24 +44,11 @@ jobs:
 
   tests:
     runs-on: ubuntu-latest
-    env:
-      PYTEST_ADDOPTS: --color=yes
     steps:
     - uses: actions/checkout@v3
-    - name: Set up Python
-      id: python-setup
-      uses: actions/setup-python@v3
+    - name: Build and run dev container tests
+      uses: devcontainers/ci@v0.2
       with:
-        python-version: ${{ env.PYTHON_VERSION }}
-    - name: Install deps
-      id: install
-      shell: bash
-      run: |
-        bash ./install.sh "sudo"
-
-        python3 -m pip install --upgrade pip
-        python3 -m pip install --upgrade -e ".[tests]"
-    - name: Tests
-      id: pytest
-      shell: bash
-      run: pytest -vv tests
+        env: |
+          AWS_CREDS_HOST_PATH=${{ github.workspace }}/tests/e2e/mock_aws_creds
+        runCmd: pytest -vv tests
