@@ -285,20 +285,13 @@ class DockerTask:
         Arguments:
             path: Absolute path to output the docker compose file to
         """
-        local_subnet = self.docker.network.inspect(ECS_NETWORK_NAME).ipam.config[0][
-            "Subnet"
-        ]
-
-        # parses docker compose file for task into Config object
-        config = self.docker.compose.config()
+        network_inspect = self.docker.network.inspect(ECS_NETWORK_NAME)
+        ip_config = network_inspect.ipam.config[0]
 
         # get list of IPs already assigned within docker network
         assigned = [
-            attr.ipv4_address
-            for attr in self.docker.network.inspect(
-                ECS_NETWORK_NAME
-            ).containers.values()
-        ]
+            attr.ipv4_address for attr in network_inspect.containers.values()
+        ].append(ip_config["Gateway"], ip_config["Subnet"].split("/")[0])
 
         # compose service network attribute
         service_networks = {}
@@ -312,11 +305,13 @@ class DockerTask:
             networks[network] = {"external": True}
             external_service_networks[network] = {}
 
+        # parses docker compose file for task into Config object
+        config = self.docker.compose.config()
         for service in config.services:
             rand_ip = None
             # gets random IP that isn't assigned within docker network
             while rand_ip is None or rand_ip in assigned:
-                rand_ip = random_ip(local_subnet)
+                rand_ip = random_ip(ip_config["Subnet"])
             assigned.append(rand_ip)
 
             service_networks[service] = {
