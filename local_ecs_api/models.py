@@ -1,15 +1,17 @@
+import json
+import logging
 import os
+import pickle
 import re
 import uuid
 from datetime import datetime
-import logging
-from typing import List, Optional, Any, Dict
-import pickle
 from functools import cached_property
+from typing import Any, Dict, List, Optional
 
+import boto3
 from pydantic import BaseModel
 from python_on_whales.exceptions import DockerException
-import boto3
+from python_on_whales.utils import run
 
 from local_ecs_api.converters import DockerTask
 
@@ -336,12 +338,29 @@ class RunTaskBackend(DockerTask):
         if self._last_status:
             return self._last_status
 
-        for proj in self.docker.compose.ls(all=True):
-            if proj.name == self.docker.compose.client_config.compose_project_name:
-                if proj.status == "running":
+        ##
+        full_cmd = self.docker.docker_compose_cmd + [
+            "ls",
+            "--format",
+            "json",
+            "--all",
+        ]
+        for proj in json.loads(run(full_cmd)):
+            if proj["Name"] == self.docker.compose.client_config.compose_project_name:
+                statuses = re.sub(r"\([0-9]+\)", "", proj["Status"]).split(", ")
+                if "running" in statuses:
                     return "RUNNING"
-                if proj.status == "exited":
+                if "exited" in statuses:
                     return "STOPPED"
+        ##
+
+        # replace above ## section with below once PR is merged and within release: https://github.com/gabrieldemarmiesse/python-on-whales/pull/377
+        # for proj in self.docker.compose.ls(all=True):
+        #     if proj.name == self.docker.compose.client_config.compose_project_name:
+        #         if proj.running:
+        #             return "RUNNING"
+        #         if proj.exited:
+        #             return "STOPPED"
 
     @last_status.setter
     def last_status(self, value):
