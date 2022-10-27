@@ -1,16 +1,16 @@
-import os
-import logging
-import re
-from pprint import pformat
 import json
+import logging
+import os
+import re
 import uuid
+from pprint import pformat
 
-import pytest
 import boto3
+import pytest
 from python_on_whales import DockerClient, docker
 from python_on_whales.exceptions import DockerException
 
-from local_ecs_api.converters import ECS_NETWORK_NAME, DOCKER_PROJECT_PREFIX
+from local_ecs_api.converters import DOCKER_PROJECT_PREFIX, ECS_NETWORK_NAME
 from tests.data import task_defs
 
 log = logging.getLogger(__name__)
@@ -31,15 +31,16 @@ FILE_DIR = os.path.dirname(__file__)
 )
 def local_api(request) -> DockerClient:
     """Creates local-ecs-api compose project"""
-    if os.environ.get("IS_DEV_CONTAINER") and not os.environ.get("AWS_CREDS_HOST_PATH"):
-        # reason being that the ~/.aws host path will differ between local machines and
-        # setting the host path to the dev container's absolute path results in a mounting
-        # permission error (atleast for MacOS)
-        pytest.fail(
-            "AWS_CREDS_HOST_PATH needs to be explicitly set if running tests within docker container"
-        )
-    else:
-        os.environ["AWS_CREDS_HOST_PATH"] = os.path.join(FILE_DIR, "mock-aws-creds")
+    if not os.environ.get("AWS_CREDS_HOST_PATH"):
+        if os.environ.get("IS_DEV_CONTAINER"):
+            # reason being that the ~/.aws host path will differ between local machines and
+            # setting the host path to the dev container's absolute path results in a mounting
+            # permission error (atleast for MacOS)
+            pytest.fail(
+                "AWS_CREDS_HOST_PATH needs to be explicitly set if running tests within docker container"
+            )
+        else:
+            os.environ["AWS_CREDS_HOST_PATH"] = os.path.join(FILE_DIR, "mock-aws-creds")
 
     # docker network to host local-ecs-api compose project
     os.environ["NETWORK_NAME"] = "local-ecs-api-tests"
