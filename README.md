@@ -8,27 +8,9 @@ All of the following environment variables are optional and are used to configur
 
 - `ECS_ENDPOINT_URL`: Custom endpoint for ECS requests made within the local API. This endpoint URL will be used for redirecting any ECS requests that are not supported by this API and for retrieving the task definition to be converted into docker compose files.
 
-- `ECS_ENDPOINT_AWS_REGION`: TODO
+- `ECS_ENDPOINT_AWS_REGION`: AWS region used within ECS endpoint
 
-To configure how the ECS endpoint will retrieve the credentials to vend to task containers, one group of the following environment variables needs to be set. The permissions associated with the credentials have to be able to assume any IAM role that the container tasks may need.
-
-A:
-   - `ECS_ENDPOINT_AWS_PROFILE`: [AWS profile](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html) name
-   - `ECS_ENDPOINT_AWS_CREDS_HOST_PATH`: Path to the `.aws/` credentials directory within the host machine. 
-   - `ECS_AWS_CREDS_VOLUME_NAME` [OPTIONAL] (default: `ecs-local-aws-creds-volume`): Name of the docker volume that will mount the `ECS_ENDPOINT_AWS_CREDS_HOST_PATH` path to the ECS endpoint container 
-
-B:
-   - `ECS_ENDPOINT_AWS_ACCESS_KEY_ID`: AWS access key
-   - `ECS_ENDPOINT_AWS_SECRET_ACCESS_KEY`: AWS secret access key
-
-
-- `COMPOSE_DEST` (default: `/tmp`): The directory where task definition conversion to compose files should be stored
-- `IAM_ENDPOINT`: Custom IAM endpoint the local ECS endpoint container will use for retrieving task AWS credentials
-- `STS_ENDPOINT`: Custom STS endpoint used for:
-   -  Retrieving AWS execution role credentials within local-ecs-api container
-   -  Retrieving AWS task credentials within the local ECS endpoint container
-- `SECRET_MANAGER_ENDPOINT_URL`: Custom Secret Manager endpoint used to retrieve secrets specified within the task definition to load into containers
-- `SSM_ENDPOINT_URL`: Custom Systems Manager endpoint used to retrieve secrets specified within the task definition to load into containers
+- `ECS_EXTERNAL_NETWORKS`: List of pre-existing docker networks to connect ECS endpoint and ECS task containers to delimited by "," (e.g. ECS_EXTERNAL_NETWORKS=network-bar,network-foo)
 
 The local-ecs-api needs AWS permissions to fulfill RunTask API calls. See the Credentials Requirements section for more details. The credentials can be passed via:
 
@@ -37,6 +19,26 @@ A:
    - `AWS_SECRET_ACCESS_KEY`: AWS secret access key used for assuming task execution role and getting task definition
 B:
    - `AWS_PROFILE`: [AWS profile](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html) name
+
+
+To configure how the ECS endpoint will retrieve the credentials to vend to task containers, one group of the following environment variables needs to be set. The permissions associated with the credentials have to be able to assume any IAM role that the task containers may need.
+
+A:
+   - `ECS_ENDPOINT_AWS_PROFILE`: [AWS profile](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html) name
+   - `AWS_CREDS_HOST_PATH`: Path to the `.aws/` credentials directory within the host machine. 
+   - `ECS_AWS_CREDS_VOLUME_NAME` [OPTIONAL] (default: `ecs-local-aws-creds-volume`): Name of the docker volume that will mount the `AWS_CREDS_HOST_PATH` path to the ECS endpoint container
+
+B:
+   - `ECS_ENDPOINT_AWS_ACCESS_KEY_ID`: AWS access key
+   - `ECS_ENDPOINT_AWS_SECRET_ACCESS_KEY`: AWS secret access key
+
+- `COMPOSE_DEST` (default: `/tmp`): The directory where task definition conversion to compose files should be stored
+- `IAM_ENDPOINT`: Custom IAM endpoint the local ECS endpoint container will use for retrieving task AWS credentials
+- `STS_ENDPOINT`: Custom STS endpoint used for:
+   -  Retrieving AWS execution role credentials within local-ecs-api container
+   -  Retrieving AWS task credentials within the local ECS endpoint container
+- `SECRET_MANAGER_ENDPOINT_URL`: Custom Secret Manager endpoint used to retrieve secrets specified within the task definition to load into containers
+- `SSM_ENDPOINT_URL`: Custom Systems Manager endpoint used to retrieve secrets specified within the task definition to load into containers
 
 ## Credentials Requirements
 
@@ -94,7 +96,7 @@ services:
 
     - ECS_AWS_CREDS_VOLUME_NAME
     - ECS_ENDPOINT_AWS_PROFILE
-    - ECS_ENDPOINT_AWS_CREDS_HOST_PATH
+    - AWS_CREDS_HOST_PATH
 
     - ECS_ENDPOINT_AWS_ACCESS_KEY_ID
     - ECS_ENDPOINT_AWS_SECRET_ACCESS_KEY
