@@ -50,11 +50,18 @@ def local_api(request) -> DockerClient:
     yield docker
 
     log.debug("Disconnecting containers from network: %s", ECS_NETWORK_NAME)
-    containers = list(client.network.inspect(ECS_NETWORK_NAME).containers.keys())
-    log.debug(pformat(containers))
+    try:
+        containers = list(client.network.inspect(ECS_NETWORK_NAME).containers.keys())
+    except DockerException as err:
+        if re.search(r"Error: No such network:", err.stderr):
+            log.debug("Network does not exists -- skipping")
+        else:
+            raise err
+    else:
+        log.debug(pformat(containers))
 
-    client.container.remove(containers, force=True, volumes=True)
-    client.network.remove(ECS_NETWORK_NAME)
+        client.container.remove(containers, force=True, volumes=True)
+        client.network.remove(ECS_NETWORK_NAME)
 
     client.compose.stop()
     # keeps local-ecs-api compose project containers to access
