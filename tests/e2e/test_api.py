@@ -67,14 +67,20 @@ def local_api(request) -> DockerClient:
         client.network.remove(ECS_NETWORK_NAME)
 
     client.compose.stop()
-    # keeps local-ecs-api compose project containers to access
-    # docker logs for debugging if any test(s) failed
+
+    # if any test(s) failed, keep containers to access docker logs for debugging
     if not getattr(request.node.obj, "any_failures", False):
+        # run docker compose down on local-ecs-api docker project
         client.compose.down(volumes=True)
-        # TODO: create teardown logic to remove ONLY task containers
-        # that are dangling
-        # maybe use a filter on docker label?
-        # or use DOCKER_PROJECT_PREFIX to filter out unrelated projects
+
+        # removes ecs task containers associated with task docker network
+        containers = [
+            container.id
+            for container in docker.container.list(
+                all=True, filters={"network": ECS_NETWORK_NAME}
+            )
+        ]
+        docker.container.remove(containers, force=True, volumes=True)
 
 
 @pytest.fixture(scope="module", autouse=True)
