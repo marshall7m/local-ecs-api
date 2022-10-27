@@ -44,6 +44,6 @@
     }
   },
   "name": "Python 3",
-  "postStartCommand": "/bin/bash ./.devcontainer/entrypoint.sh",
+  "overrideCommand": false,
   "remoteUser": "vscode"
 }

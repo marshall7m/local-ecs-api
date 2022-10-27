@@ -6,10 +6,15 @@ RUN if [ "${NODE_VERSION}" != "none" ]; then su vscode -c "umask 0002 && . /usr/
 
 COPY ./install.sh /tmp/deps/install.sh
 COPY ./pyproject.toml /tmp/deps/pyproject.toml
+COPY ./.devcontainer/entrypoint.sh /entrypoint.sh
 
 RUN bash /tmp/deps/install.sh "sudo" \
     && sudo apt-get -y update \
     && sudo apt-get -y install graphviz \
     && python3 -m pip install --upgrade pip \
     && python3 -m pip install --upgrade --disable-pip-version-check --no-cache-dir -e "/tmp/deps[tests]" \
-    && rm -rf /tmp/deps
+    && rm -rf /tmp/deps \
+    && chmod +x /entrypoint.sh
+
+ENTRYPOINT [ "/entrypoint.sh" ]
+CMD [ "sleep", "infinity" ]

@@ -49,6 +49,6 @@ jobs:
     - name: Build and run dev container tests
       uses: devcontainers/ci@v0.2
       with:
+        runCmd: pytest -vv tests
         env: |
           AWS_CREDS_HOST_PATH=${{ github.workspace }}/tests/e2e/mock_aws_creds
-        runCmd: pytest -vv tests
