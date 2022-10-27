@@ -12,11 +12,24 @@ All of the following environment variables are optional and are used to configur
 
 - `ECS_EXTERNAL_NETWORKS`: List of pre-existing docker networks to connect ECS endpoint and ECS task containers to delimited by "," (e.g. ECS_EXTERNAL_NETWORKS=network-bar,network-foo)
 
+- `COMPOSE_DEST` (default: `/tmp`): The directory where task definition conversion to compose files should be stored
+
+- `IAM_ENDPOINT`: Custom IAM endpoint the local ECS endpoint container will use for retrieving task AWS credentials
+
+- `STS_ENDPOINT`: Custom STS endpoint used for:
+   -  Retrieving AWS execution role credentials within local-ecs-api container
+   -  Retrieving AWS task credentials within the local ECS endpoint container
+
+- `SECRET_MANAGER_ENDPOINT_URL`: Custom Secret Manager endpoint used to retrieve secrets specified within the task definition to load into containers
+
+- `SSM_ENDPOINT_URL`: Custom Systems Manager endpoint used to retrieve secrets specified within the task definition to load into containers
+
 The local-ecs-api needs AWS permissions to fulfill RunTask API calls. See the Credentials Requirements section for more details. The credentials can be passed via:
 
 A:
    - `AWS_ACCESS_KEY_ID`: AWS access key used for assuming task execution role and getting task definition
    - `AWS_SECRET_ACCESS_KEY`: AWS secret access key used for assuming task execution role and getting task definition
+
 B:
    - `AWS_PROFILE`: [AWS profile](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html) name
 
@@ -31,14 +44,6 @@ A:
 B:
    - `ECS_ENDPOINT_AWS_ACCESS_KEY_ID`: AWS access key
    - `ECS_ENDPOINT_AWS_SECRET_ACCESS_KEY`: AWS secret access key
-
-- `COMPOSE_DEST` (default: `/tmp`): The directory where task definition conversion to compose files should be stored
-- `IAM_ENDPOINT`: Custom IAM endpoint the local ECS endpoint container will use for retrieving task AWS credentials
-- `STS_ENDPOINT`: Custom STS endpoint used for:
-   -  Retrieving AWS execution role credentials within local-ecs-api container
-   -  Retrieving AWS task credentials within the local ECS endpoint container
-- `SECRET_MANAGER_ENDPOINT_URL`: Custom Secret Manager endpoint used to retrieve secrets specified within the task definition to load into containers
-- `SSM_ENDPOINT_URL`: Custom Systems Manager endpoint used to retrieve secrets specified within the task definition to load into containers
 
 ## Credentials Requirements
 
@@ -260,8 +265,17 @@ The following ECS responses will contain attributes that reference the local doc
 (same as `RunTask`)
 
 `ListTasks`
-# TODO
+```
+{
+    'taskArns': <Task ARNs retreived from ECSBackend class>,
+}
+```
 
+## Notes on ECS_CONTAINER_METADATA_URI
+
+Within a remote AWS environment, the ECS container agent provides an [endpoint](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-metadata-endpoint.html) for retrieving task metadata and Docker stats. The `amazon/amazon-ecs-local-container-endpoints` docker image used within this project simulates the endpoint locally. The local endpoint provides the [V3](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-metadata-endpoint-v3.html) response metadata exclusively. 
+
+It would seem like using the endpoint response would be ideal for crafting the RunTask and DescribeTask API response. Unfortunately, the endpoint does not update the metadata to reflect the current status of the task containers. For example, if a task container is running, the endpoint will correctly return a `KnownStatus` attribute of `RUNNING`. If the endpoint was hit again after the container task was finished, the response will still return a `KnownStatus` attribute of `RUNNING` when the expected value is `STOPPED`. To work around this, the local-ecs-api container will run the appropriate docker CLI command to extract the needed values for the ECS response. 
 
 ## TODO
 
@@ -289,19 +303,4 @@ The following ECS responses will contain attributes that reference the local doc
     - if launchType == "FARGATE" then ensure capacityProviderStrategy is not set
 - add group attribute to describeTasks response
 
-
-- add heredocs to converters.py
-- add heredocs to main.py
-- add heredocs to models.py
-- create diagram for RunTask functionality
-- add save() to RunTask function for saving to .pickle file
-
-
-- create async background task to monitor when ecs task containers stop. if container stopped, gather container metadata and then remove container? ensures that subsequent RunTask calls will not use the stopped container but an entirely new one
-
-
-## Notes on ECS_CONTAINER_METADATA_URI
-
-Within a remote AWS environment, the ECS container agent provides an [endpoint](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-metadata-endpoint.html) for retrieving task metadata and Docker stats. The `amazon/amazon-ecs-local-container-endpoints` docker image used within this project simulates the endpoint locally. The local endpoint provides the [V3](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-metadata-endpoint-v3.html) response metadata exclusively. 
-
-It would seem like using the endpoint response would be ideal for crafting the RunTask and DescribeTask API response. Unfortunately, the endpoint does not update the metadata to reflect the current status of the task containers. For example, if a task container is running, the endpoint will correctly return a `KnownStatus` attribute of `RUNNING`. If the endpoint was hit again after the container task was finished, the response will still return a `KnownStatus` attribute of `RUNNING` when the expected value is `STOPPED`. To work around this, the local-ecs-api container will run the appropriate docker CLI command to extract the needed values for the ECS response. 
+- remove save() to RunTask function for saving to .pickle file
