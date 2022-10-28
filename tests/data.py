@@ -44,6 +44,10 @@ task_defs = {
                 "essential": True,
                 "image": "busybox",
                 "memory": 10,
+                "environment": [
+                    {"name": "foo", "value": "bar"},
+                    {"name": "baz", "value": "doo"},
+                ],
             },
         ],
         "family": "fast_success",

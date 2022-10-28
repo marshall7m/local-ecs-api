@@ -157,13 +157,15 @@ def test_run_task_with_failure():
 @pytest.mark.usefixtures("aws_credentials")
 @mock_ecs
 @mock_sts
-def test_run_task_with_successful_overrides():
+def test_run_task_with_overrides():
     """
     Ensures RunTask endpoint returns the expected response for task definitions
     that are expected to fail
     """
     ecs = boto3.client("ecs")
     task = ecs.register_task_definition(**task_defs["fast_success"])
+
+    override_env = {"foo": "new"}
 
     response = client.post(
         "/",
@@ -176,22 +178,26 @@ def test_run_task_with_successful_overrides():
                         "name": task_defs["fast_success"]["containerDefinitions"][0][
                             "name"
                         ],
-                        "environment": [{"name": "foo", "value": "bar"}],
+                        "environment": [
+                            {"name": key, "value": value}
+                            for key, value in override_env.items()
+                        ],
                     }
                 ]
             },
         },
     )
     response_data = response.json()
-    assert response.status_code == 200
 
-    assert len(response_data["failures"]) == 0
-    assert len(response_data["tasks"][0]["containers"]) == len(
-        task_defs["fast_success"]["containerDefinitions"]
-    )
+    log.info("Assert override environment variables are present in task container")
+    actual_env = {}
+    container_id = response_data["tasks"][0]["containers"][0]["runtimeId"]
+    for env in docker.container.inspect(container_id).config.env:
+        env = env.split("=")
+        actual_env.update({env[0]: env[1]})
 
-    for c in response_data["tasks"][0]["containers"]:
-        assert c["lastStatus"] == "exited"
+    # assert override env dict is a subset of the actual env dict
+    assert override_env.items() <= actual_env.items()
 
 
 @pytest.mark.usefixtures("aws_credentials")

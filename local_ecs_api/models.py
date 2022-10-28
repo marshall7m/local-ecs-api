@@ -570,9 +570,7 @@ class ECSBackend:
         self.created_at = datetime.timestamp(datetime.now())
 
         try:
-            task.up(
-                kwargs["count"], kwargs.get("overrides", {}).get("executionRoleArn")
-            )
+            task.up(kwargs["count"], kwargs.get("overrides", {}))
         except DockerException as err:
             log.debug(
                 "Exit code: %i while running: %s", err.return_code, err.docker_command
