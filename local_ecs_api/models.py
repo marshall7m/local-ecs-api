@@ -1,7 +1,6 @@
 import json
 import logging
 import os
-import pickle
 import re
 import uuid
 from datetime import datetime
@@ -485,13 +484,8 @@ class RunTaskBackend(DockerTask):
 
 
 class ECSBackend:
-    def __init__(self, pickle_path):
+    def __init__(self):
         self.tasks = {}
-        self.pickle_path = pickle_path
-
-    def save(self):
-        with open(self.pickle_path, "wb") as f:
-            pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
 
     def describe_tasks(self, tasks: List[str], include=None) -> Dict[str, Any]:
         """

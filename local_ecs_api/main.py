@@ -1,6 +1,5 @@
 import logging
 import os
-import pickle
 import sys
 
 import requests
@@ -25,16 +24,8 @@ formatter = logging.Formatter("%(levelname)s:     %(message)s")
 stream.setFormatter(formatter)
 log.addHandler(stream)
 
-BACKEND_PATH = os.path.join(os.path.dirname(__file__), ".backend.pickle")
-
 app = FastAPI()
-
-# TODO: see if needed
-try:
-    with open(BACKEND_PATH, "rb") as f:
-        backend = pickle.load(f)
-except FileNotFoundError:
-    backend = ECSBackend(BACKEND_PATH)
+backend = ECSBackend()
 
 
 @app.middleware("http")

@@ -302,5 +302,3 @@ It would seem like using the endpoint response would be ideal for crafting the R
     - require cpu, memory, etc
     - if launchType == "FARGATE" then ensure capacityProviderStrategy is not set
 - add group attribute to describeTasks response
-
-- remove save() to RunTask function for saving to .pickle file
