@@ -25,13 +25,13 @@ class CapacityProviderStrategy(BaseModel):
 
 
 class AwsvpcConfiguration(BaseModel):
-    assignPublicIp: str
-    securityGroups: List[str]
+    assignPublicIp: Optional[str]
+    securityGroups: Optional[List[str]]
     subnets: List[str]
 
 
 class NetworkConfiguration(BaseModel):
-    awsvpcConfiguration: AwsvpcConfiguration
+    awsvpcConfiguration: Optional[AwsvpcConfiguration]
 
 
 class ResourceRequirements(BaseModel):
@@ -107,7 +107,7 @@ class RunTaskRequest(BaseModel):
     enableExecuteCommand: Optional[bool] = False
     group: Optional[str]
     launchType: Optional[str]
-    networkConfiguration: Optional[AwsvpcConfiguration]
+    networkConfiguration: Optional[NetworkConfiguration]
     overrides: Optional[Overrides]
     placementConstraints: Optional[List[PlacementConstraints]]
     placementStrategy: Optional[List[PlacementStrategy]]

@@ -203,6 +203,34 @@ def test_run_task_with_overrides():
 @pytest.mark.usefixtures("aws_credentials")
 @mock_ecs
 @mock_sts
+def test_run_task_with_network_configuration():
+    """
+    Ensures RunTask endpoint returns the expected response for task definitions
+    that are expected to fail
+    """
+    ecs = boto3.client("ecs")
+    task = ecs.register_task_definition(**task_defs["fast_success"])
+
+    response = client.post(
+        "/",
+        headers={"x-amz-target": "RunTask"},
+        json={
+            "taskDefinition": task["taskDefinition"]["taskDefinitionArn"],
+            "networkConfiguration": {
+                "awsvpcConfiguration": {
+                    "assignPublicIp": "DISABLED",
+                    "subnets": ["subnet-123"],
+                    "securityGroups": ["sg-123"],
+                }
+            },
+        },
+    )
+    assert response.status_code == 200
+
+
+@pytest.mark.usefixtures("aws_credentials")
+@mock_ecs
+@mock_sts
 def test_run_task_pull_img_failure():
     """
     Ensures RunTask endpoint returns the expected response for task definitions
