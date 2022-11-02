@@ -115,6 +115,7 @@ class DockerTask:
         self.generate_local_task_compose_file(self.task_def, self.compose_task_filepath)
         # need to add generated compose file before running generate_local_compose_network_file
         # for parsing compose task services
+        self.docker.client_config.compose_files.append(self.compose_task_filepath)
 
         if overrides:
             log.info("Creating overrides task definition")
