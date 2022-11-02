@@ -117,6 +117,8 @@ class DockerTask:
         # for parsing compose task services
         self.docker.client_config.compose_files.append(self.compose_task_filepath)
 
+        task_role_arn = self.task_def.get("taskRoleArn")
+
         if overrides:
             log.info("Creating overrides task definition")
             overrides["containerDefinitions"] = overrides.pop("containerOverrides")
@@ -128,7 +130,11 @@ class DockerTask:
                 self.compose_run_task_overrides_filepath
             )
 
-        self.generate_local_compose_network_file(self.compose_network_filepath)
+            task_role_arn = overrides.get("taskRoleArn", task_role_arn)
+
+        self.generate_local_compose_network_file(
+            self.compose_network_filepath, task_role_arn
+        )
         self.docker.client_config.compose_files.append(self.compose_network_filepath)
         # order of list is important to ensure that the override compose files take precedence
         # over original compose files and user-defined compose files take precendence over
@@ -275,7 +281,7 @@ class DockerTask:
             os.environ.clear()
             os.environ.update(_environ)
 
-    def generate_local_compose_network_file(self, path: str) -> dict:
+    def generate_local_compose_network_file(self, path: str, task_role_arn) -> dict:
         """
         Creates docker compose file for assigning an IP addresses to the task
         container. This is needed to ensure task container IP's don't conflict
@@ -283,6 +289,7 @@ class DockerTask:
 
         Arguments:
             path: Absolute path to output the docker compose file to
+            task_role_arn: ECS task role ARN
         """
         docker_inspect = self.docker.network.inspect(ECS_NETWORK_NAME)
         network_subnet_cidr = docker_inspect.ipam.config[0]["Subnet"]
@@ -319,10 +326,14 @@ class DockerTask:
             assigned.append(rand_ip)
 
             service_networks[service] = {
+                "environment": [
+                    "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI=/role/"
+                    + task_role_arn.rsplit("/", maxsplit=1)[-1]
+                ],
                 "networks": {
                     **{ECS_NETWORK_NAME: {"ipv4_address": rand_ip}},
                     **external_service_networks,
-                }
+                },
             }
 
         file_content = {
