@@ -66,6 +66,17 @@ class DockerTask:
         self.compose_dir: str = os.path.join(
             COMPOSE_DEST, f".{self.task_name}-{self.id[:4]}"
         )
+
+        self.compose_task_filepath = (
+            os.path.join(self.compose_dir, "docker-compose.ecs-local.task.yml"),
+        )
+        self.compose_run_task_overrides_filepath = os.path.join(
+            self.compose_dir, "docker-compose.ecs-local.run-task-override.yml"
+        )
+        self.task_network_override_filepath = os.path.join(
+            self.compose_dir, "docker-compose.ecs-local.task-network-override.yml"
+        )
+
         self.docker = DockerClient(
             compose_project_name=DOCKER_PROJECT_PREFIX + self.id,
             compose_project_directory=self.compose_dir,
@@ -102,35 +113,30 @@ class DockerTask:
         os.makedirs(self.compose_dir, exist_ok=True)
 
         task_path = self.generate_local_task_compose_file(
-            self.task_def,
-            os.path.join(self.compose_dir, "docker-compose.ecs-local.task.yml"),
+            self.task_def, self.compose_task_filepath
         )
+        # need to add generated compose file before running generate_local_compose_network_file
+        # for parsing compose task services
         self.docker.client_config.compose_files.append(task_path)
-
-        self.generate_local_compose_network_file(
-            os.path.join(
-                self.compose_dir, "docker-compose.ecs-local.task-network-override.yml"
-            )
-        )
 
         if overrides:
             log.info("Creating overrides task definition")
             overrides["containerDefinitions"] = overrides.pop("containerOverrides")
 
             self.generate_local_task_compose_file(
-                overrides,
-                os.path.join(
-                    self.compose_dir, "docker-compose.ecs-local.run-task-override.yml"
-                ),
+                overrides, self.compose_run_task_overrides_filepath
             )
-
+        self.generate_local_compose_network_file(self.compose_network_filepath)
         # order of list is important to ensure that the override compose files take precedence
         # over original compose files and user-defined compose files take precendence over
         # override files
-
         all_compose_files = (
-            glob(self.compose_dir + "/*[!override].yml")
-            + glob(self.compose_dir + "/*override.yml")
+            [
+                self.compose_task_filepath,
+                self.compose_run_task_overrides_filepath,
+                self.compose_network_filepath,
+            ]
+            + glob(self.compose_dir + "/*.override.yml")
             + glob(os.path.join(COMPOSE_DEST, f"*.{self.task_name}.yml"))
         )
         compose_files = set()
