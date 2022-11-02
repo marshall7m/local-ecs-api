@@ -252,17 +252,13 @@ class DockerTask:
         # preserve env vars before creating docker compose related env vars
         _environ = os.environ.copy()
 
+        execution_role = self.task_def.get("executionRoleArn")
         if overrides:
-            execution_role = overrides.get("executionRoleArn") or self.task_def.get(
-                "executionRoleArn"
-            )
-
-        else:
-            execution_role = self.task_def.get("executionRoleArn")
+            execution_role = overrides.get("executionRoleArn", execution_role)
 
         try:
-            log.info("Assuming task execution role")
             if execution_role:
+                log.info("Assuming task execution role")
                 self.assume_task_execution_role(execution_role)
 
             log.info("Setting env vars for task secrets")
@@ -279,7 +275,7 @@ class DockerTask:
             os.environ.clear()
             os.environ.update(_environ)
 
-    def generate_local_compose_network_file(self, path: str) -> None:
+    def generate_local_compose_network_file(self, path: str) -> dict:
         """
         Creates docker compose file for assigning an IP addresses to the task
         container. This is needed to ensure task container IP's don't conflict
@@ -338,3 +334,5 @@ class DockerTask:
         log.debug("Writing to path:\n%s", pformat(file_content))
         with open(path, "w+") as f:
             yaml.dump(file_content, f)
+
+        return file_content
