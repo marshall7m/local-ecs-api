@@ -159,13 +159,13 @@ def test_run_task_with_failure():
 @mock_sts
 def test_run_task_with_overrides():
     """
-    Ensures RunTask endpoint returns the expected response for task definitions
-    that are expected to fail
+    Ensures RunTask endpoint returns the expected response for requests with overrides
     """
     ecs = boto3.client("ecs")
     task = ecs.register_task_definition(**task_defs["fast_success"])
 
     override_env = {"foo": "new"}
+    override_task_role = "arn:aws:iam::12345679012:role/new"
 
     response = client.post(
         "/",
@@ -183,7 +183,8 @@ def test_run_task_with_overrides():
                             for key, value in override_env.items()
                         ],
                     }
-                ]
+                ],
+                "taskRoleArn": override_task_role,
             },
         },
     )
@@ -198,6 +199,12 @@ def test_run_task_with_overrides():
 
     # assert override env dict is a subset of the actual env dict
     assert override_env.items() <= actual_env.items()
+
+    log.info("Assert override task role is present in task container")
+    assert (
+        actual_env.get("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI")
+        == "/role/" + override_task_role.rsplit("/", maxsplit=1)[-1]
+    )
 
 
 @pytest.mark.usefixtures("aws_credentials")
