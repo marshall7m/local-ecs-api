@@ -196,8 +196,8 @@ class DockerTask:
         )["Credentials"]
 
         os.environ["AWS_ACCESS_KEY_ID"] = creds["AccessKeyId"]
-        os.environ["AWS_SECRET_ACCESS_KEY"] = creds["AccessKeyId"]
-        os.environ["AWS_SESSION_TOKEN"] = creds["AccessKeyId"]
+        os.environ["AWS_SECRET_ACCESS_KEY"] = creds["SecretAccessKey"]
+        os.environ["AWS_SESSION_TOKEN"] = creds["SessionToken"]
 
     def ecs_endpoint_up(self) -> None:
         """Setup and run docker compose up for ECS endpoint"""
